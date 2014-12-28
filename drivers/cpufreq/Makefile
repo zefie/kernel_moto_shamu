@@ -1,4 +1,5 @@
 CFLAGS_cpufreq_impulse.o := -Wno-unused-value
+CFLAGS_cpufreq_yankactive.o := -Wno-sequence-point
 
 # CPUfreq core
 obj-$(CONFIG_CPU_FREQ)			+= cpufreq.o freq_table.o
@@ -18,6 +19,7 @@ obj-$(CONFIG_CPU_FREQ_GOV_BLU_ACTIVE)+= cpufreq_blu_active.o
 obj-$(CONFIG_CPU_FREQ_GOV_HELLSACTIVE)	+= cpufreq_hellsactive.o
 obj-$(CONFIG_CPU_FREQ_GOV_BARRY_ALLEN)	+= cpufreq_barry_allen.o
 obj-$(CONFIG_CPU_FREQ_GOV_ZZMOOVE)   += cpufreq_zzmoove.o
+obj-$(CONFIG_CPU_FREQ_GOV_YANKACTIVE)	+= cpufreq_yankactive.o
 obj-$(CONFIG_CPU_BOOST)			+= cpu-boost.o
 
 obj-$(CONFIG_GENERIC_CPUFREQ_CPU0)	+= cpufreq-cpu0.o

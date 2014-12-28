@@ -453,6 +453,10 @@ extern struct cpufreq_governor cpufreq_gov_hellsactive;
 #define CPUFREQ_DEFAULT_GOVERNOR        (&cpufreq_gov_hellsactive)
 extern struct cpufreq_governor cpufreq_gov_barry_allen;
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_barry_allen)
+#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_YANKACTIVE)
+extern struct cpufreq_governor cpufreq_gov_yankactive;
+#define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_yankactive)
+>>>>>>> ef9366d... cpufreq: add yankactive governor
 #endif
 
 /*********************************************************************
