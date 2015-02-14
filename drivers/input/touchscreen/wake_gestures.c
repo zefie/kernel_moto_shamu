@@ -113,10 +113,10 @@ static void report_gesture(int gest)
 	pwrtrigger_time[0] = jiffies;
 
 	if (pwrtrigger_time[0] - pwrtrigger_time[1] < TRIGGER_TIMEOUT)
-		return;
+	return;
 
 	wake_lock_timeout(&dt2w_wakelock, HZ/2);
-	pr_debug("WG: gesture = %d\n", gest);
+	printk("WG: gesture = %d\n", gest);
 	input_report_rel(gesture_dev, WAKE_GESTURE, gest);
 	input_sync(gesture_dev);
 }
@@ -125,7 +125,7 @@ static void report_gesture(int gest)
 /* PowerKey work func */
 static void wake_presspwr(struct work_struct * wake_presspwr_work) {
 	if (!mutex_trylock(&pwrkeyworklock))
-		return;
+	return;
 
 	input_event(wake_dev, EV_KEY, KEY_POWER, 1);
 	input_event(wake_dev, EV_SYN, 0, 0);
@@ -187,13 +187,13 @@ static void detect_doubletap2wake(int x, int y, bool st)
 {
         bool single_touch = st;
 #if WG_DEBUG
-        pr_debug(LOGTAG"x,y(%4d,%4d) tap_time_pre:%llu\n",
+        pr_info(LOGTAG"x,y(%4d,%4d) tap_time_pre:%llu\n",
                 x, y, tap_time_pre);
 #endif
 	if (x < SWEEP_EDGE || x > SWEEP_X_LIMIT)
-		return;
+	return;
 	if (y < SWEEP_EDGE || y > SWEEP_Y_LIMIT)
-		return;
+	return;
 
 	if ((single_touch) && (dt2w_switch) && (exec_count) && (touch_cnt)) {
 		touch_cnt = false;
@@ -213,7 +213,7 @@ static void detect_doubletap2wake(int x, int y, bool st)
 			new_touch(x, y);
 		}
 		if ((touch_nr > 1)) {
-			pr_debug(LOGTAG"double tap\n");
+			pr_info(LOGTAG"double tap\n");
 			exec_count = false;
 #if (WAKE_GESTURES_ENABLED)
 			if (gestures_switch) {
@@ -278,7 +278,7 @@ static void detect_sweep2wake_v(int x, int y, bool st)
 				if (y < prevy) {
 					if (y < (nexty - SWEEP_Y_NEXT)) {
 						if (exec_county && (jiffies - firsty_time < SWEEP_TIMEOUT)) {
-							pr_debug(LOGTAG"sweep up\n");
+							pr_info(LOGTAG"sweep up\n");
 #if (WAKE_GESTURES_ENABLED)
 							if (gestures_switch) {
 								report_gesture(3);
@@ -309,7 +309,7 @@ static void detect_sweep2wake_v(int x, int y, bool st)
 				if (y > prevy) {
 					if (y > (nexty + SWEEP_Y_NEXT)) {
 						if (exec_county && (jiffies - firsty_time < SWEEP_TIMEOUT)) {
-							pr_debug(LOGTAG"sweep down\n");
+							pr_info(LOGTAG"sweep down\n");
 #if (WAKE_GESTURES_ENABLED)
 							if (gestures_switch) {
 								report_gesture(4);
@@ -366,7 +366,7 @@ static void detect_sweep2wake_h(int x, int y, bool st, bool scr_suspended)
 				if (x > prevx) {
 					if (x > (SWEEP_X_MAX - SWEEP_X_FINAL)) {
 						if (exec_countx && (jiffies - firstx_time < SWEEP_TIMEOUT)) {
-							pr_debug(LOGTAG"sweep right\n");
+							pr_info(LOGTAG"sweep right\n");
 #if (WAKE_GESTURES_ENABLED)
 							if (gestures_switch && scr_suspended) {
 								report_gesture(1);
@@ -400,7 +400,7 @@ static void detect_sweep2wake_h(int x, int y, bool st, bool scr_suspended)
 				if (x < prevx) {
 					if (x < SWEEP_X_FINAL) {
 						if (exec_countx) {
-							pr_debug(LOGTAG"sweep left\n");
+							pr_info(LOGTAG"sweep left\n");
 #if (WAKE_GESTURES_ENABLED)
 							if (gestures_switch && scr_suspended) {
 								report_gesture(2);
