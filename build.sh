@@ -15,7 +15,7 @@ DEFCONFIG="hells_defconfig"
 
 # Kernel Details
 BASE_HC_VER="hC"
-VER="-b8.2-L"
+VER="-Alpha-1"
 HC_VER="$BASE_HC_VER$VER"
 
 # Vars
@@ -25,19 +25,15 @@ export SUBARCH=arm
 
 # Paths
 KERNEL_DIR=`pwd`
-REPACK_DIR="${HOME}/Android/Kernel/hC-N5-anykernel"
-ZIP_MOVE="${HOME}/Android/Kernel/hC-releases"
-ZIMAGE_DIR="${HOME}/Android/Kernel/hells-Core-N5/arch/arm/boot"
-DB_FOLDER="${HOME}/Dropbox/Kernel-Betas/N5"
+REPACK_DIR="${HOME}/Android/Kernel/hC-N6-anykernel"
+ZIP_MOVE="${HOME}/Android/Kernel/hC-releases/N6"
+ZIMAGE_DIR="${HOME}/Android/Kernel/hells-Core-N6/arch/arm/boot"
+DB_FOLDER="${HOME}/Dropbox/Kernel-Betas/N6"
 
 # Functions
 function clean_all {
 		rm -rf $REPACK_DIR/kernel/zImage
 		rm -rf $ZIMAGE_DIR/$KERNEL
-		rm -rf $RAMFS.gz
-		rm -rf $KERNEL_DIR/dt.img
-		rm -rf $KERNEL_DIR/boot.img
-		rm -rf $KERNEL_DIR/arch/arm/boot/ramdisk.gz
 		make clean && make mrproper
 }
 
@@ -45,7 +41,7 @@ function make_kernel {
 		make $DEFCONFIG
 		make $THREAD
 		cp -vr $ZIMAGE_DIR/$KERNEL $REPACK_DIR/kernel
-		mv ${HOME}/Android/Kernel/hC-N5-anykernel/kernel/zImage-dtb ${HOME}/Android/Kernel/hC-N5-anykernel/kernel/zImage
+		mv ${HOME}/Android/Kernel/hC-N6-anykernel/kernel/zImage-dtb ${HOME}/Android/Kernel/hC-N6-anykernel/kernel/zImage
 }
 
 function make_zip {
