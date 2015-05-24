@@ -72,7 +72,7 @@ struct cpufreq_suspend_t {
 };
 
 /* maxscroff */
-uint32_t maxscroff_freq = 1190400;
+uint32_t maxscroff_freq = 729000;
 uint32_t maxscroff = 1;
 
 /* ex max freq */
