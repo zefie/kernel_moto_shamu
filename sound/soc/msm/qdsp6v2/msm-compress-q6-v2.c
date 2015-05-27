@@ -345,7 +345,7 @@ static void compr_event_handler(uint32_t opcode,
 				"byte_offset=%d, copied_total=%d, token=%d\n",
 			       payload[3],
 			       payload[0],
- 			       prtd->byte_offset, prtd->copied_total, token);
+                               prtd->byte_offset, prtd->copied_total, token);
 
 			if (atomic_read(&prtd->drain) && prtd->last_buffer) {
 				pr_debug("wake up on drain\n");
