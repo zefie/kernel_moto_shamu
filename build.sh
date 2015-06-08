@@ -11,24 +11,26 @@ clear
 # Resources
 THREAD="-j9"
 KERNEL="zImage-dtb"
-DEFCONFIG="hells_defconfig"
+DEFCONFIG="benzo_defconfig"
 
 # Kernel Details
-BASE_HC_VER="hC"
-VER="-b7-t2-ZEN"
-HC_VER="$BASE_HC_VER$VER"
+BC="benzoCore"
+VER="b5-test1"
+BC_VER=$BC-$VER
 
 # Vars
-export LOCALVERSION=-`echo $HC_VER`
+export LOCALVERSION=-`echo $VER`
 export ARCH=arm
 export SUBARCH=arm
+export CROSS_COMPILE=../arm-eabi-6.0/bin/arm-eabi-
+export KBUILD_BUILD_USER=xanaxdroid
+export KBUILD_BUILD_HOST=benzo
 
 # Paths
 KERNEL_DIR=`pwd`
-REPACK_DIR="${HOME}/Android/Kernel/hC-N6-anykernel-ZEN"
-ZIP_MOVE="${HOME}/Android/Kernel/hC-releases/N6"
-ZIMAGE_DIR="${HOME}/Android/Kernel/hells-Core-N6/arch/arm/boot"
-DB_FOLDER="${HOME}/Dropbox/Kernel-Betas/N6"
+REPACK_DIR="$KERNEL_DIR/zip/bCzip"
+ZIP_MOVE="$KERNEL_DIR/zip/"
+ZIMAGE_DIR="$KERNEL_DIR/arch/arm/boot"
 
 # Functions
 function clean_all {
@@ -40,42 +42,35 @@ function clean_all {
 function make_kernel {
 		make $DEFCONFIG
 		make $THREAD
-		cp -vr $ZIMAGE_DIR/$KERNEL $REPACK_DIR/kernel
-		mv ${HOME}/Android/Kernel/hC-N6-anykernel-ZEN/kernel/zImage-dtb ${HOME}/Android/Kernel/hC-N6-anykernel-ZEN/kernel/zImage
+		cp -vr $ZIMAGE_DIR/$KERNEL ${KERNEL_DIR}/zip/bCzip/kernel/zImage
 }
 
 function make_zip {
 		cd $REPACK_DIR
-		zip -9 -r `echo $HC_VER`.zip .
-		mv  `echo $HC_VER`.zip $ZIP_MOVE
-		cd $KERNEL_DIR
-}
-
-function copy_dropbox {
-		cd $ZIP_MOVE
-		cp -vr  `echo $HC_VER`.zip $DB_FOLDER
+		zip -9 -r `echo $BC_VER`.zip .
+		mv  `echo $BC_VER`.zip $ZIP_MOVE
 		cd $KERNEL_DIR
 }
 
 DATE_START=$(date +"%s")
 
 echo -e "${green}"
-echo "hC Kernel Creation Script:"
+echo "benzoCore Kernel Creation Script:"
 echo
 
 echo "---------------"
 echo "Kernel Version:"
 echo "---------------"
 
-echo -e "${red}"; echo -e "${blink_red}"; echo "$HC_VER"; echo -e "${restore}";
+echo -e "${red}"; echo -e "${blink_red}"; echo "$BC_VER"; echo -e "${restore}";
 
 echo -e "${green}"
 echo "-----------------"
-echo "Making hC Kernel:"
+echo "Making benzoCore Kernel:"
 echo "-----------------"
 echo -e "${restore}"
 
-while read -p "Please choose your option: [1]clean-build / [2]dirty-build / [3]zip-only / [4]abort " cchoice
+while read -p "Please choose your option: [1]clean-build / [2]dirty-build / [3]abort " cchoice
 do
 case "$cchoice" in
 	1 )
@@ -87,61 +82,42 @@ case "$cchoice" in
 		clean_all
 		echo -e "${green}"
 		echo
-		echo "[....Building `echo $HC_VER`....]"
+		echo "[....Building `echo $BC_VER`....]"
 		echo
 		echo -e "${restore}"
 		make_kernel
 		echo -e "${green}"
 		echo
-		echo "[....Make `echo $HC_VER`.zip....]"
+		echo "[....Make `echo $BC_VER`.zip....]"
 		echo
 		echo -e "${restore}"
 		make_zip
 		echo -e "${green}"
 		echo
-		echo "[.....Moving `echo $HC_VER`.....]"
-		echo
+		echo "[.....Moving `echo $BC_VER`.....]"
 		echo -e "${restore}"
-		copy_dropbox
 		break
 		;;
 	2 )
 		echo -e "${green}"
 		echo
-		echo "[....Building `echo $HC_VER`....]"
+		echo "[....Building `echo $BC_VER`....]"
 		echo
 		echo -e "${restore}"
 		make_kernel
 		echo -e "${green}"
 		echo
-		echo "[....Make `echo $HC_VER`.zip....]"
+		echo "[....Make `echo $BC_VER`.zip....]"
 		echo
 		echo -e "${restore}"
 		make_zip
 		echo -e "${green}"
 		echo
-		echo "[.....Moving `echo $HC_VER`.....]"
-		echo
+		echo "[.....Moving `echo $BC_VER`.....]"
 		echo -e "${restore}"
-		copy_dropbox
 		break
 		;;
 	3 )
-		echo -e "${green}"
-		echo
-		echo "[....Make `echo $HC_VER`.zip....]"
-		echo
-		echo -e "${restore}"
-		make_zip
-		echo -e "${green}"
-		echo
-		echo "[.....Moving `echo $HC_VER`.....]"
-		echo
-		echo -e "${restore}"
-		copy_dropbox
-		break
-		;;
-	4 )
 		break
 		;;
 	* )
