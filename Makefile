@@ -241,7 +241,7 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 
 HOSTCC       = gcc
 HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -Ofast -DNDEBUG -fomit-frame-pointer -fgcse-las -fgraphite -floop-flatten -floop-parallelize-all -ftree-loop-linear -floop-interchange -floop-strip-mine -floop-block -pipe -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers -Wno-unused-variable -Wno-unused-value
+HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -Ofast -DNDEBUG -fomit-frame-pointer -fgcse-las -fgraphite -floop-flatten -floop-parallelize-all -ftree-loop-linear -floop-interchange -floop-strip-mine -floop-block -pipe -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers -Wno-unused-variable -Wno-unused-value -Wno-maybe-uninitialized -Wno-unused-value
 HOSTCXXFLAGS = -Ofast -DNDEBUG -fgcse-las -fgraphite -floop-flatten -floop-parallelize-all -ftree-loop-linear -floop-interchange -floop-strip-mine -floop-block -pipe
 
 # Decide whether to build built-in, modular, or both.
@@ -380,9 +380,7 @@ KBUILD_CFLAGS   := $(GRAPHITE) -Wall -DNDEBUG -Wundef -Wstrict-prototypes -Wno-t
 		   -Werror-implicit-function-declaration -mvectorize-with-neon-quad \
 		   -Wno-format-security -mtune=cortex-a15 -fstdarg-opt -fsection-anchors \
                    -fmodulo-sched -fmodulo-sched-allow-regmoves -ftree-vectorize -ffast-math \
-                   -funswitch-loops -fpredictive-commoning -fgcse-after-reload \
-		   -fno-aggressive-loop-optimizations \
-		   -fno-delete-null-pointer-checks \
+                   -funswitch-loops -fpredictive-commoning -fgcse-after-reload -fno-delete-null-pointer-checks \
                    --param l1-cache-size=16 --param l1-cache-line-size=16 --param l2-cache-size=2048
 
 KBUILD_AFLAGS_KERNEL :=
