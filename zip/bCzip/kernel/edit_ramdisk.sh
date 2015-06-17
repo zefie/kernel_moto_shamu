@@ -50,6 +50,10 @@ if [ "$found" != 'run-parts /system/etc/init.d' ]; then
         echo "    group root" >> /tmp/ramdisk/init.rc
 fi
 
+#copy fstab
+cp /tmp/fstab.shamu /tmp/ramdisk/fstab.shamu
+chmod 750 /tmp/ramdisk/fstab.shamu
+
 #copy custom init.shamu.power.rc
 cp /tmp/init.shamu.power.rc /tmp/ramdisk/init.shamu.power.rc
 chmod 750 /tmp/ramdisk/init.shamu.power.rc
