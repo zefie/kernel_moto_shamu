@@ -15,14 +15,14 @@ DEFCONFIG="benzo_defconfig"
 
 # Kernel Details
 BC="benzoCore"
-VER="b7c"
+VER="b8"
 BC_VER=$BC-$VER
 
 # Vars
 export LOCALVERSION=-`echo $VER`
 export ARCH=arm
 export SUBARCH=arm
-export CROSS_COMPILE=../arm-eabi-6.0/bin/arm-eabi-
+export CROSS_COMPILE=../arm-eabi-5.1/bin/arm-eabi-
 export KBUILD_BUILD_USER=xanaxdroid
 export KBUILD_BUILD_HOST=benzo
 
