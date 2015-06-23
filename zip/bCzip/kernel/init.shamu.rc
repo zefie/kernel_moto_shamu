@@ -24,6 +24,9 @@ on early-init
     mount debugfs debugfs /sys/kernel/debug
     chown system system /sys/kernel/debug/kgsl/proc
 
+    # Set SELinux to Permissive
+    setenforce 0
+
 on init
     chmod 0701 /mnt/media_rw
     mkdir /mnt/media_rw/usbdisk 0775 system system
@@ -50,6 +53,7 @@ on init
 on fs
     mount_all fstab.shamu
     setprop ro.crypto.fuse_sdcard true
+    setprop ro.secure 0
 
     # Keeping following partitions outside fstab file. As user may not have
     # these partition flashed on the device. Failure to mount any partition in fstab file
@@ -259,6 +263,19 @@ on boot
     # Vibrator permissions
     chown system system /sys/vibrator/pwmvalue
     chmod 0644 /sys/vibrator/pwmvalue
+
+    # Wake Gestures
+    chown system system /sys/android_touch/doubletap2wake
+    chmod 0644 /sys/android_touch/doubletap2wake
+    chown system system /sys/android_touch/sweep2wake
+    chmod 0644 /sys/android_touch/sweep2wake
+    chown system system /sys/android_touch/sweep2sleep
+    chmod 0644 /sys/android_touch/sweep2sleep
+    chown system system /sys/android_touch/wake_gestures
+    chmod 0644 /sys/android_touch/wake_gestures
+    chown system system /sys/android_touch/vib_strength
+    chmod 0644 /sys/android_touch/vib_strength
+    write /sys/android_touch/vib_strength 40
 
     # Display color calibration
     chown system system /sys/devices/platform/kcal_ctrl.0/kcal
