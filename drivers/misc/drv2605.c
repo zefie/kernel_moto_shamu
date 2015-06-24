@@ -1242,16 +1242,6 @@ static int drv260x_init(void)
 	wake_lock_init(&vibdata.wklock, WAKE_LOCK_SUSPEND, "vibrator");
 	mutex_init(&vibdata.lock);
 
-	drv2605_kobj = kobject_create_and_add("drv2605", NULL) ;
-	if (drv2605_kobj == NULL) {
-		printk(KERN_ALERT "drv260x: drv2605_kobj create_and_add failed\n");
-	}
-
-	reval = sysfs_create_file(drv2605_kobj, &dev_attr_rtp_strength.attr);
-	if (reval) {
-		printk(KERN_ALERT "drv260x: sysfs_create_file failed for rtp_strength\n");
-	}
-
 	printk(KERN_ALERT "drv260x: initialized\n");
 
 	vibe_kobj = kobject_create_and_add("vibrator", NULL);
