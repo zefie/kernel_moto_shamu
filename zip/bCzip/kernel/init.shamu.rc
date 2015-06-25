@@ -264,6 +264,16 @@ on boot
     chown system system /sys/vibrator/pwmvalue
     chmod 0644 /sys/vibrator/pwmvalue
 
+    # Adreno Idler
+    chown system system /sys/module/adreno_idler/parameters/adreno_idler_active
+    chmod 0644 /sys/module/adreno_idler/parameters/adreno_idler_active
+    chown system system /sys/module/adreno_idler/parameters/adreno_idler_downdifferential
+    chmod 0644 /sys/module/adreno_idler/parameters/adreno_idler_downdifferential
+    chown system system /sys/module/adreno_idler/parameters/adreno_idler_idewait
+    chmod 0644 /sys/module/adreno_idler/parameters/adreno_idler_idewait
+    chown system system /sys/module/adreno_idler/parameters/adreno_idler_ideworkload
+    chmod 0644 /sys/module/adreno_idler/parameters/adreno_idler_ideworkload
+
     # Wake Gestures
     chown system system /sys/android_touch/doubletap2wake
     chmod 0644 /sys/android_touch/doubletap2wake
