@@ -9,13 +9,13 @@ restore='\033[0m'
 clear
 
 # Resources
-THREAD="-j9"
+THREAD="-j10"
 KERNEL="zImage-dtb"
 DEFCONFIG="benzo_defconfig"
 
 # Kernel Details
 BC="benzoCore"
-VER="b11"
+VER="b11c"
 BC_VER=$BC-$VER
 
 # Vars
