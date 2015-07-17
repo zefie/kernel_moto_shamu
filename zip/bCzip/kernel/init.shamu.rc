@@ -32,6 +32,9 @@ on init
     chmod 0701 /mnt/media_rw
     mkdir /mnt/media_rw/usbdisk 0775 system system
     # See storage config details at http://source.android.com/tech/storage/
+    mkdir /mnt/media_rw/usbdisk 0700 media_rw media_rw
+    mkdir /storage/usbdisk 0700 root root
+
     mkdir /mnt/shell/emulated 0700 shell shell
     mkdir /storage/emulated 0555 root root
 
@@ -186,6 +189,10 @@ on boot
 
     chmod 0444 /sys/devices/platform/msm_hsusb/gadget/usb_state
 
+    # e/frandom permissions
+    chmod 444 /dev/erandom
+    chmod 444 /dev/frandom
+
     # Allow QMUX daemon to assign port open wait time
     chown radio radio /sys/devices/virtual/hsicctl/hsicctl0/modem_wait
 
@@ -274,19 +281,6 @@ on boot
     chmod 0644 /sys/module/adreno_idler/parameters/adreno_idler_idewait
     chown system system /sys/module/adreno_idler/parameters/adreno_idler_ideworkload
     chmod 0644 /sys/module/adreno_idler/parameters/adreno_idler_ideworkload
-
-    # Wake Gestures
-    chown system system /sys/android_touch/doubletap2wake
-    chmod 0644 /sys/android_touch/doubletap2wake
-    chown system system /sys/android_touch/sweep2wake
-    chmod 0644 /sys/android_touch/sweep2wake
-    chown system system /sys/android_touch/sweep2sleep
-    chmod 0644 /sys/android_touch/sweep2sleep
-    chown system system /sys/android_touch/wake_gestures
-    chmod 0644 /sys/android_touch/wake_gestures
-    chown system system /sys/android_touch/vib_strength
-    chmod 0644 /sys/android_touch/vib_strength
-    write /sys/android_touch/vib_strength 40
 
     # Display color calibration
     chown system system /sys/devices/platform/kcal_ctrl.0/kcal
@@ -439,6 +433,22 @@ service netmgrd /system/bin/netmgrd
     class main
     group radio
 
+service imsqmidaemon /system/bin/imsqmidaemon
+    class main
+    user system
+    socket ims_qmid stream 0660 system radio
+    group radio log
+
+service imsdatadaemon /system/bin/imsdatadaemon
+    class main
+    user root
+    socket ims_datad stream 0660 system radio
+    group system wifi radio inet log
+    disabled
+
+on property:sys.ims.QMI_DAEMON_STATUS=1
+    start imsdatadaemon
+
 service sensors /system/bin/sensors.qcom
     class core
     user root
@@ -546,6 +556,11 @@ service adspd /system/bin/adspd /dev/ttyHS3
    socket adspdsock stream 0660 media media
    user media
    group media input
+
+#external storage
+service fuse_usbdisk /system/bin/sdcard -u 1023 -g 1023  /mnt/media_rw/usbdisk /storage/usbdisk
+    class late_start
+    disabled
 
 on property:sys.boot_completed=1
     start qcom-post-boot
@@ -660,3 +675,7 @@ service atfwd /system/bin/ATFWD-daemon
     class late_start
     user system
     group system radio
+
+service cnd /system/bin/cnd
+    class late_start
+    socket cnd stream 660 root inet
