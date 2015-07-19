@@ -22,7 +22,7 @@ BC_VER=$BC-$VER
 export LOCALVERSION=-`echo $VER`
 export ARCH=arm
 export SUBARCH=arm
-export CROSS_COMPILE=../arm-eabi-5.1/bin/arm-eabi-
+export CROSS_COMPILE=../arm-eabi-5.2/bin/arm-eabi-
 export KBUILD_BUILD_USER=xanaxdroid
 export KBUILD_BUILD_HOST=benzo
 
