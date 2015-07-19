@@ -19,12 +19,19 @@ VER="b16c"
 BC_VER=$BC-$VER
 
 # Vars
+export USE_CCACHE=1
 export LOCALVERSION=-`echo $VER`
 export ARCH=arm
 export SUBARCH=arm
-export CROSS_COMPILE=../arm-eabi-5.2/bin/arm-eabi-
 export KBUILD_BUILD_USER=xanaxdroid
 export KBUILD_BUILD_HOST=benzo
+CROSS_COMPILE=../arm-eabi-5.2/bin/arm-eabi-
+
+if [ "$USE_CCACHE" = 1 ]; then
+   export CROSS_COMPILE="ccache $CROSS_COMPILE"
+else
+   export CROSS_COMPILE="$CROSS_COMPILE"
+fi
 
 # Paths
 KERNEL_DIR=`pwd`
