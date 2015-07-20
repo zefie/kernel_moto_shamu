@@ -39,32 +39,32 @@
 #define WG_DEFAULT		0
 #define S2W_DEFAULT		0
 #define S2S_DEFAULT		0
-#define WG_PWRKEY_DUR           60
+#define WG_PWRKEY_DUR   30
 
 /* shamu */
-#define SWEEP_Y_MAX             2559
-#define SWEEP_X_MAX             1439
+#define SWEEP_Y_MAX     2559
+#define SWEEP_X_MAX     1439
 #define SWEEP_EDGE		130
-#define SWEEP_Y_LIMIT           SWEEP_Y_MAX-SWEEP_EDGE
-#define SWEEP_X_LIMIT           SWEEP_X_MAX-SWEEP_EDGE
-#define SWEEP_X_B1              532
-#define SWEEP_X_B2              960
-#define SWEEP_Y_START		1066
-#define SWEEP_X_START		720
-#define SWEEP_X_FINAL           360
-#define SWEEP_Y_NEXT            180
-#define DT2W_FEATHER		150
+#define SWEEP_Y_LIMIT   SWEEP_Y_MAX-SWEEP_EDGE
+#define SWEEP_X_LIMIT   SWEEP_X_MAX-SWEEP_EDGE
+#define SWEEP_X_B1      532
+#define SWEEP_X_B2      960
+#define SWEEP_Y_START	1066
+#define SWEEP_X_START	720
+#define SWEEP_X_FINAL   360
+#define SWEEP_Y_NEXT    180
+#define DT2W_FEATHER	150
 #define DT2W_TIME 		50
 
 /* Wake Gestures */
-#define SWEEP_TIMEOUT		30
-#define TRIGGER_TIMEOUT		50
-#define WAKE_GESTURE		0x0b
+#define SWEEP_TIMEOUT	30
+#define TRIGGER_TIMEOUT	50
+#define WAKE_GESTURE	0x0b
 #define SWEEP_RIGHT		0x01
 #define SWEEP_LEFT		0x02
 #define SWEEP_UP		0x04
 #define SWEEP_DOWN		0x08
-#define VIB_STRENGTH 		20
+#define VIB_STRENGTH 	40
 
 
 #define WAKE_GESTURES_ENABLED	1
