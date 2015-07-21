@@ -38,3 +38,4 @@ on property:dev.bootcomplete=1
 	write /sys/devices/system/cpu/cpu3/cpufreq/scaling_governor conservative
 	write /sys/block/mmcblk0rpmb/queue/scheduler bfq
 	write /sys/block/mmcblk0rpmb/queue/read_ahead_kb 1536
+    write /sys/module/cpu_boost/parameters/sync_threshold 0
