@@ -15,7 +15,7 @@ DEFCONFIG="benzo_defconfig"
 
 # Kernel Details
 BC="benzoCore"
-VER="b18"
+VER="b20"
 BC_VER=$BC-$VER
 
 # Vars
