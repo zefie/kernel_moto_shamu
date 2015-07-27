@@ -72,6 +72,7 @@ on property:dev.bootcomplete=1
     write /sys/devices/system/cpu/cpu2/cpufreq/scaling_governor conservative
     write /sys/devices/system/cpu/cpu3/cpufreq/scaling_governor conservative
     write /sys/module/msm_thermal/core_control/enabled 1
+    write /sys/module/adreno_idler/parameters/adreno_idler_active N
 
     # cpufreq settings
     write /sys/devices/system/cpu/cpufreq/interactive/above_hispeed_delay "20000 1400000:40000 1700000:20000"
