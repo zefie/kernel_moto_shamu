@@ -71,19 +71,31 @@ on property:dev.bootcomplete=1
     write /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor conservative
     write /sys/devices/system/cpu/cpu2/cpufreq/scaling_governor conservative
     write /sys/devices/system/cpu/cpu3/cpufreq/scaling_governor conservative
-    write /sys/module/msm_thermal/core_control/enabled 1
+    write /dev/cpuctl/apps/cpu.notify_on_migrate 0
     write /sys/module/adreno_idler/parameters/adreno_idler_active N
+    write /sys/module/msm_thermal/parameters/enabled Y
+    write /sys/module/msm_thermal/parameters/limit_temp_degC 65
+    write /sys/module/msm_thermal/core_control/enabled 0
+    write /sys/module/cpu_boost/parameters/sync_threshold 0
+    write /sys/module/cpu_boost/parameters/input_boost_freq "0:0 1:0 2:0 3:0"
+    write /sys/module/cpu_boost/parameters/input_boost_ms 1500
 
     # cpufreq settings
-    write /sys/devices/system/cpu/cpufreq/interactive/above_hispeed_delay "20000 1400000:40000 1700000:20000"
-    write /sys/devices/system/cpu/cpufreq/interactive/go_hispeed_load 90
-    write /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq 1497600
-    write /sys/devices/system/cpu/cpufreq/interactive/target_loads "85 1500000:90 1800000:70"
-    write /sys/devices/system/cpu/cpufreq/interactive/min_sample_time 40000
-    write /sys/devices/system/cpu/cpufreq/interactive/sampling_down_factor 100000
-    write /sys/module/cpu_boost/parameters/input_boost_freq 1497600
-    write /sys/module/cpu_boost/parameters/input_boost_ms 1500
-    write /sys/module/msm_thermal/parameters/temp_threshold 70
+    write /sys/devices/system/cpu/cpufreq/conservative/up_threshold 95
+    write /sys/devices/system/cpu/cpufreq/conservative/down_threshold 30
+    write /sys/devices/system/cpu/cpufreq/conservative/freq_step 5
+    write /sys/devices/system/cpu/cpufreq/conservative/sampling_down_factor 1
+    write /sys/devices/system/cpu/cpufreq/conservative/sampling_rate 2000
+    write /sys/devices/system/cpu/cpufreq/conservative/input_boost_freq 1497600
     write /sys/class/misc/mako_hotplug_control/load_threshold 0
-    write /sys/class/misc/mako_hotplug_control/high_load_counter 5
-    write /dev/cpuctl/apps/cpu.notify_on_migrate 0
+    write /sys/class/misc/mako_hotplug_control/high_load_counter 10
+    write /sys/class/misc/mako_hotplug_control/max_load_counter 20
+    write /sys/class/misc/mako_hotplug_control/cpufreq_unplug_limit 1800000
+    write /sys/class/misc/mako_hotplug_control/min_time_cpu_online 1
+    write /sys/class/misc/mako_hotplug_control/timer 1
+    write /sys/module/msm_hotplug/min_cpus_online 1
+    write /sys/module/msm_hotplug/down_lock_duration 500
+    write /sys/module/msm_hotplug/boost_lock_duration 2500
+    write /sys/module/msm_hotplug/update_rates "200 5:100 50:50 350:200"
+    write /sys/module/msm_hotplug/fast_lane_load 100
+
