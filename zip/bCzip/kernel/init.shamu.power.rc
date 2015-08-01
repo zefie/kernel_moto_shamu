@@ -87,15 +87,29 @@ on property:dev.bootcomplete=1
     write /sys/devices/system/cpu/cpufreq/conservative/sampling_down_factor 1
     write /sys/devices/system/cpu/cpufreq/conservative/sampling_rate 2000
     write /sys/devices/system/cpu/cpufreq/conservative/input_boost_freq 1497600
+
+    # Mako
     write /sys/class/misc/mako_hotplug_control/load_threshold 0
     write /sys/class/misc/mako_hotplug_control/high_load_counter 10
     write /sys/class/misc/mako_hotplug_control/max_load_counter 20
     write /sys/class/misc/mako_hotplug_control/cpufreq_unplug_limit 1800000
     write /sys/class/misc/mako_hotplug_control/min_time_cpu_online 1
     write /sys/class/misc/mako_hotplug_control/timer 1
+
+    # MSM Hotplug
     write /sys/module/msm_hotplug/min_cpus_online 1
     write /sys/module/msm_hotplug/down_lock_duration 500
     write /sys/module/msm_hotplug/boost_lock_duration 2500
     write /sys/module/msm_hotplug/update_rates "200 5:100 50:50 350:200"
     write /sys/module/msm_hotplug/fast_lane_load 100
 
+    # Bricked
+    write /sys/kernel/msm_mpdecision/conf/enabled 0
+    write /sys/kernel/msm_mpdecision/conf/min_cpus_online 1
+    write /sys/kernel/msm_mpdecision/conf/min_cpus_online_susp 1
+    write /sys/kernel/msm_mpdecision/conf/max_cpus_online 4
+    write /sys/kernel/msm_mpdecision/conf/max_cpus_online_susp 1
+    write /sys/kernel/msm_mpdecision/conf/suspend_defer_time 10
+    write /sys/kernel/msm_mpdecision/conf/idle_freq 499200
+    write /sys/kernel/msm_mpdecision/conf/startdelay 20000
+    write /sys/kernel/msm_mpdecision/conf/delay 20000
