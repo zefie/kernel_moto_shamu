@@ -1,5 +1,6 @@
 CFLAGS_cpufreq_impulse.o := -Wno-unused-value
 CFLAGS_cpufreq_smartmax.o := -Wno-implicit-function-declaration
+CFLAGS_cpufreq_yankactive.o := -Wno-sequence-point
 
 # CPUfreq core
 obj-$(CONFIG_CPU_FREQ)			+= cpufreq.o freq_table.o
