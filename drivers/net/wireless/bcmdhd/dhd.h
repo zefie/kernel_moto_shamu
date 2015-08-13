@@ -351,7 +351,9 @@ typedef struct dhd_pub {
 #ifdef PNO_SUPPORT
 	void *pno_state;
 #endif
+#ifdef RTT_SUPPORT
 	void *rtt_state;
+#endif
 #ifdef ROAM_AP_ENV_DETECTION
 	bool	roam_env_detection;
 #endif
@@ -427,27 +429,6 @@ typedef struct dhd_pub {
 	uint32 memdump_enabled;
 	uint8 rand_mac_oui[DOT11_OUI_LEN];
 } dhd_pub_t;
-
-typedef struct {
-	uint rxwake;
-	uint rcwake;
-#ifdef DHD_WAKE_RX_STATUS
-	uint rx_bcast;
-	uint rx_arp;
-	uint rx_mcast;
-	uint rx_multi_ipv6;
-	uint rx_icmpv6;
-	uint rx_icmpv6_ra;
-	uint rx_icmpv6_na;
-	uint rx_icmpv6_ns;
-	uint rx_multi_ipv4;
-	uint rx_multi_other;
-	uint rx_ucast;
-#endif
-#ifdef DHD_WAKE_EVENT_STATUS
-	uint rc_event[WLC_E_LAST];
-#endif
-} wake_counts_t;
 
 #if defined(BCMWDF)
 typedef struct {
@@ -635,8 +616,7 @@ extern void dhd_store_conn_status(uint32 event, uint32 status, uint32 reason);
 extern bool dhd_prec_enq(dhd_pub_t *dhdp, struct pktq *q, void *pkt, int prec);
 
 /* Receive frame for delivery to OS.  Callee disposes of rxp. */
-extern void dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *rxp, int numpkt,
-	uint8 chan, int pkt_wake, wake_counts_t *wcp);
+extern void dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *rxp, int numpkt, uint8 chan);
 
 /* Return pointer to interface name */
 extern char *dhd_ifname(dhd_pub_t *dhdp, int idx);

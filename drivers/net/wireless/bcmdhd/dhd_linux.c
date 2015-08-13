@@ -2793,8 +2793,7 @@ dhd_is_rxthread_enabled(dhd_pub_t *dhdp)
 #endif /* DHD_WMF */
 
 void
-dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan,
-	     int pkt_wake, wake_counts_t *wcp)
+dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 {
 	dhd_info_t *dhd = (dhd_info_t *)dhdp->info;
 	struct sk_buff *skb;
@@ -2809,9 +2808,9 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan,
 	void *skbhead = NULL;
 	void *skbprev = NULL;
 	uint16 protocol;
-#if defined(DHD_RX_DUMP) || defined(DHD_8021X_DUMP) || defined(DHD_WAKE_STATUS)
+#if defined(DHD_RX_DUMP) || defined(DHD_8021X_DUMP)
 	char *dump_data;
-#endif /* DHD_RX_DUMP || DHD_8021X_DUMP || DHD_WAKE_STATUS */
+#endif /* DHD_RX_DUMP || DHD_8021X_DUMP */
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
@@ -2933,8 +2932,7 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan,
 		if (protocol == ETHER_TYPE_802_1X) {
 			DBG_EVENT_LOG(dhdp, WIFI_EVENT_DRIVER_EAPOL_FRAME_RECEIVED);
 		}
-#if defined(DHD_RX_DUMP) || defined(DHD_8021X_DUMP) || defined(DHD_DHCP_DUMP) \
-	|| defined(DHD_WAKE_STATUS)
+#if defined(DHD_RX_DUMP) || defined(DHD_8021X_DUMP) || defined(DHD_DHCP_DUMP)
 		dump_data = skb->data;
 #endif /* DHD_RX_DUMP || DHD_8021X_DUMP || DHD_DHCP_DUMP */
 #ifdef DHD_8021X_DUMP
@@ -3044,17 +3042,6 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan,
 			}
 #endif /* PNO_SUPPORT */
 
-#ifdef DHD_WAKE_STATUS
-			if (unlikely(pkt_wake)) {
-				wcp->rcwake++;
-#ifdef DHD_WAKE_EVENT_STATUS
-				if (event.event_type < WLC_E_LAST)
-					wcp->rc_event[event.event_type]++;
-#endif
-				pkt_wake = 0;
-			}
-#endif
-
 #ifdef DHD_DONOT_FORWARD_BCMEVENT_AS_NETWORK_PKT
 			PKTFREE(dhdp->osh, pktbuf, FALSE);
 			continue;
@@ -3069,56 +3056,6 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan,
 #ifdef PROP_TXSTATUS
 			dhd_wlfc_save_rxpath_ac_time(dhdp, (uint8)PKTPRIO(skb));
 #endif /* PROP_TXSTATUS */
-
-#ifdef DHD_WAKE_STATUS
-			if (unlikely(pkt_wake)) {
-				wcp->rxwake++;
-#ifdef DHD_WAKE_RX_STATUS
-#define ETHER_ICMP6_HEADER	20
-#define ETHER_IPV6_SADDR (ETHER_ICMP6_HEADER + 2)
-#define ETHER_IPV6_DAADR (ETHER_IPV6_SADDR + IPV6_ADDR_LEN)
-#define ETHER_ICMPV6_TYPE (ETHER_IPV6_DAADR + IPV6_ADDR_LEN)
-				if (ntoh16(skb->protocol) == ETHER_TYPE_ARP) /* ARP */
-					wcp->rx_arp++;
-				if (dump_data[0] == 0xFF) { /* Broadcast */
-					wcp->rx_bcast++;
-				} else if (dump_data[0] & 0x01) { /* Multicast */
-					wcp->rx_mcast++;
-					if (ntoh16(skb->protocol) == ETHER_TYPE_IPV6) {
-						wcp->rx_multi_ipv6++;
-						if ((skb->len > ETHER_ICMP6_HEADER) &&
-						    (dump_data[ETHER_ICMP6_HEADER] == IPPROTO_ICMPV6)) {
-							wcp->rx_icmpv6++;
-							if (skb->len > ETHER_ICMPV6_TYPE) {
-								switch (dump_data[ETHER_ICMPV6_TYPE]) {
-								case NDISC_ROUTER_ADVERTISEMENT:
-									wcp->rx_icmpv6_ra++;
-									break;
-								case NDISC_NEIGHBOUR_ADVERTISEMENT:
-									wcp->rx_icmpv6_na++;
-									break;
-								case NDISC_NEIGHBOUR_SOLICITATION:
-									wcp->rx_icmpv6_ns++;
-									break;
-								}
-							}
-						}
-					} else if (dump_data[2] == 0x5E) {
-						wcp->rx_multi_ipv4++;
-					} else {
-						wcp->rx_multi_other++;
-					}
-				} else { /* Unicast */
-					wcp->rx_ucast++;
-				}
-#undef ETHER_ICMP6_HEADER
-#undef ETHER_IPV6_SADDR
-#undef ETHER_IPV6_DAADR
-#undef ETHER_ICMPV6_TYPE
-#endif
-				pkt_wake = 0;
-			}
-#endif
 		}
 
 		ASSERT(ifidx < DHD_MAX_IFS && dhd->iflist[ifidx]);
@@ -5565,8 +5502,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	dhd->suspend_bcn_li_dtim = CUSTOM_SUSPEND_BCN_LI_DTIM;
 	DHD_TRACE(("Enter %s\n", __FUNCTION__));
 	dhd->op_mode = 0;
-	/* clear AP flags */
-	dhd->dhd_cflags &= ~WLAN_PLAT_AP_FLAG;
 	if ((!op_mode && dhd_get_fw_mode(dhd->info) == DHD_FLAG_MFG_MODE) ||
 		(op_mode == DHD_FLAG_MFG_MODE)) {
 		/* Check and adjust IOCTL response timeout for Manufactring firmware */
@@ -5659,8 +5594,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 			DHD_ERROR(("%s maxassoc for HostAPD failed  %d\n", __FUNCTION__, ret));
 		}
 #endif
-		/* set AP flag for specific country code of SOFTAP */
-		dhd->dhd_cflags |= WLAN_PLAT_AP_FLAG;
 	} else if ((!op_mode && dhd_get_fw_mode(dhd->info) == DHD_FLAG_MFG_MODE) ||
 		(op_mode == DHD_FLAG_MFG_MODE)) {
 #if defined(ARP_OFFLOAD_SUPPORT)
@@ -5727,9 +5660,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 
 	DHD_ERROR(("Firmware up: op_mode=0x%04x, MAC="MACDBG"\n",
 		dhd->op_mode, MAC2STRDBG(dhd->mac.octet)));
-	/* get a ccode and revision for the country code */
-	get_customized_country_code(dhd->info->adapter, dhd->dhd_cspec.country_abbrev,
-			&dhd->dhd_cspec, dhd->dhd_cflags);
 	/* Set Country code  */
 	if (dhd->dhd_cspec.ccode[0] != 0) {
 		bcm_mkiovar("country", (char *)&dhd->dhd_cspec,
