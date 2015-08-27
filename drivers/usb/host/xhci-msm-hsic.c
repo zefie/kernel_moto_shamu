@@ -699,8 +699,7 @@ static irqreturn_t mxhci_hsic_wakeup_irq(int irq, void *data)
 			mxhci->wakeup_int_cnt);
 
 	if (wl_divide == 1) pm_stay_awake(mxhci->dev);
-	else if (wl_divide > 1) pm_wakeup_event(mxhci->dev, 
-		WL_TIMEOUT/wl_divide);
+	else pm_wakeup_event(mxhci->dev, WL_TIMEOUT/wl_divide);
 
 	spin_lock(&mxhci->wakeup_lock);
 	if (mxhci->wakeup_irq_enabled) {
@@ -963,8 +962,7 @@ static int mxhci_hsic_resume(struct mxhci_hsic_hcd *mxhci)
 	}
 
 	if (wl_divide == 1) pm_stay_awake(mxhci->dev);
-	else if (wl_divide > 1) pm_wakeup_event(mxhci->dev, 
-		WL_TIMEOUT/wl_divide);
+	else pm_wakeup_event(mxhci->dev, WL_TIMEOUT/wl_divide);
 
 	/* enable force-on mode for periph_on */
 	clk_set_flags(mxhci->system_clk, CLKFLAG_RETAIN_PERIPH);
@@ -1670,8 +1668,7 @@ static int mxhci_hsic_probe(struct platform_device *pdev)
 
 	device_init_wakeup(&pdev->dev, 1);
 	if (wl_divide == 1) pm_stay_awake(mxhci->dev);
-	else if (wl_divide > 1) pm_wakeup_event(mxhci->dev, 
-		WL_TIMEOUT/wl_divide);
+	else pm_wakeup_event(mxhci->dev, WL_TIMEOUT/wl_divide);
 
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
