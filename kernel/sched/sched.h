@@ -279,6 +279,7 @@ struct cfs_rq {
 	unsigned long runnable_load_avg, blocked_load_avg;
 	atomic64_t decay_counter;
 	u64 last_decay;
+	atomic_long_t removed_load;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	u32 tg_runnable_contrib;
