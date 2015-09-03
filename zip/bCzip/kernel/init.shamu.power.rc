@@ -68,10 +68,11 @@ on property:dev.bootcomplete=1
     write /sys/devices/system/cpu/cpu2/cpufreq/scaling_governor conservative
     write /sys/devices/system/cpu/cpu3/cpufreq/scaling_governor conservative
     write /dev/cpuctl/apps/cpu.notify_on_migrate 0
-    write /sys/module/adreno_idler/parameters/adreno_idler_active N
+    write /sys/module/adreno_idler/parameters/adreno_idler_active Y
     write /sys/module/msm_thermal/parameters/enabled Y
-    write /sys/module/msm_thermal/parameters/limit_temp_degC 65
-    write /sys/module/msm_thermal/core_control/enabled 0
+    write /sys/module/msm_thermal/parameters/limit_temp_degC 80
+    write /sys/module/msm_thermal/core_control/enabled 1
+    write /sys/kernel/fast_charge/force_fast_charge 1
     write /sys/module/cpu_boost/parameters/sync_threshold 0
     write /sys/module/cpu_boost/parameters/input_boost_freq "0:0 1:0 2:0 3:0"
     write /sys/module/cpu_boost/parameters/input_boost_ms 1500
@@ -83,6 +84,21 @@ on property:dev.bootcomplete=1
     write /sys/devices/system/cpu/cpufreq/conservative/sampling_down_factor 1
     write /sys/devices/system/cpu/cpufreq/conservative/sampling_rate 2000
     write /sys/devices/system/cpu/cpufreq/conservative/input_boost_freq 1497600
+
+    # Intelli_Plug
+    write /sys/kernel/intelli_plug/intelli_plug_active 1
+    write /sys/kernel/intelli_plug/boot_lock_duration 2500
+    write /sys/kernel/intelli_plug/cpu_nr_run_threshold 500
+    write /sys/kernel/intelli_plug/cpus_boosted 1
+    write /sys/kernel/intelli_plug/debug_intelli_plug 0
+    write /sys/kernel/intelli_plug/def_sampling_ms 268
+    write /sys/kernel/intelli_plug/down_lock_duration 2500
+    write /sys/kernel/intelli_plug/full_mode_profile 0
+    write /sys/kernel/intelli_plug/max_cpus_online 4
+    write /sys/kernel/intelli_plug/max_cpus_online_susp 1
+    write /sys/kernel/intelli_plug/min_cpus_online 1
+    write /sys/kernel/intelli_plug/nr_fshift 3
+    write /sys/kernel/intelli_plug/nr_run_hysteresis 8
 
     # Mako
     write /sys/class/misc/mako_hotplug_control/load_threshold 0
