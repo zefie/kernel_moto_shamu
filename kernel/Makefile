@@ -14,6 +14,7 @@ CFLAGS_nsproxy.o := -fno-strict-aliasing
 CFLAGS_audit.o := -fno-strict-aliasing
 CFLAGS_auditfilter.o := -fno-strict-aliasing
 CFLAGS_cgroup.o := -fno-strict-aliasing
+CFLAGS_audit.o := -Wno-tautological-compare
 
 obj-y     = fork.o exec_domain.o panic.o printk.o \
 	    cpu.o exit.o itimer.o time.o softirq.o resource.o \
