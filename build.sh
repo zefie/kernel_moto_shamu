@@ -25,7 +25,7 @@ export ARCH=arm
 export SUBARCH=arm
 export KBUILD_BUILD_USER=xanaxdroid
 export KBUILD_BUILD_HOST=benzo
-CROSS_COMPILE=../arm-eabi-5.2/bin/arm-eabi-
+CROSS_COMPILE=../arm-eabi-6.0/bin/arm-eabi-
 
 if [ "$USE_CCACHE" = 1 ]; then
    export CROSS_COMPILE="ccache $CROSS_COMPILE"
