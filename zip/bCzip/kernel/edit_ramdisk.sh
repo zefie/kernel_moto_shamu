@@ -50,6 +50,12 @@ if [ "$found" != 'run-parts /system/etc/init.d' ]; then
         echo "    group root" >> /tmp/ramdisk/init.rc
 fi
 
+#add benzoCore's init script without replacing all of init.shamu.rc.
+foundbrc=$(find /tmp/ramdisk/init.shamu.rc -type f | xargs grep -oh "import init.benzo.rc");
+if [ "$foundbrc" != 'import init.benzo.rc' ]; then
+	sed -i 's/import init.shamu.diag.rc/import init.benzo.rc'"\n"'import init.shamu.diag.rc/g' /tmp/ramdisk/init.shamu.rc
+fi
+
 #copy fstab
 cp /tmp/fstab.shamu /tmp/ramdisk/fstab.shamu
 chmod 750 /tmp/ramdisk/fstab.shamu
@@ -57,10 +63,6 @@ chmod 750 /tmp/ramdisk/fstab.shamu
 #copy custom init.shamu.power.rc
 cp /tmp/init.shamu.power.rc /tmp/ramdisk/init.shamu.power.rc
 chmod 750 /tmp/ramdisk/init.shamu.power.rc
-
-#copy custom init.shamu.rc
-cp /tmp/init.shamu.rc /tmp/ramdisk/init.shamu.rc
-chmod 750 /tmp/ramdisk/init.shamu.rc
 
 #copy init.benzo.rc
 cp /tmp/init.benzo.rc /tmp/ramdisk/init.benzo.rc
