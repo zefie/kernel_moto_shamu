@@ -2546,6 +2546,8 @@ static DEVICE_ATTR(luns, S_IRUGO | S_IWUSR,
 				mass_storage_lun_info_show,
 				mass_storage_lun_info_store);
 
+// Remove for DroidDrive CDROM Patch
+/*
 static ssize_t mass_storage_cdrom_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
@@ -2564,7 +2566,7 @@ static ssize_t mass_storage_cdrom_store(struct device *dev,
 }
 
 static DEVICE_ATTR(cdrom, S_IWUSR, NULL, mass_storage_cdrom_store);
-
+*/
 static struct device_attribute *mass_storage_function_attributes[] = {
 	&dev_attr_inquiry_string,
 	&dev_attr_luns,
