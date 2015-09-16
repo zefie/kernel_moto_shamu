@@ -14,8 +14,8 @@ KERNEL="zImage-dtb"
 DEFCONFIG="zefie_defconfig"
 
 # Kernel Details
-BC="benzoCore-zefie"
-VER="git-`date +%Y-%m-%d`"
+BC="benzoCore"
+VER="zefie-git-`date +%Y-%m-%d`"
 BC_VER=$BC-$VER
 
 # Vars
@@ -23,8 +23,8 @@ export USE_CCACHE=1
 export LOCALVERSION=-`echo $VER`
 export ARCH=arm
 export SUBARCH=arm
-export KBUILD_BUILD_USER=xanaxdroid
-export KBUILD_BUILD_HOST=benzo
+#export KBUILD_BUILD_USER=xanaxdroid
+#export KBUILD_BUILD_HOST=benzo
 export LD_LIBRARY_PATH=~/tmp/arm-linux-gnueabi-6.0/lib/
 CROSS_COMPILE=~/tmp/arm-linux-gnueabi-6.0/bin/arm-eabi-
 
