@@ -11,11 +11,11 @@ clear
 # Resources
 THREAD="-j10"
 KERNEL="zImage-dtb"
-DEFCONFIG="benzo_defconfig"
+DEFCONFIG="zefie_defconfig"
 
 # Kernel Details
-BC="benzoCore"
-VER="b26c"
+BC="benzoCore-zefie"
+VER="git-`date +%Y-%m-%d`"
 BC_VER=$BC-$VER
 
 # Vars
@@ -25,7 +25,8 @@ export ARCH=arm
 export SUBARCH=arm
 export KBUILD_BUILD_USER=xanaxdroid
 export KBUILD_BUILD_HOST=benzo
-CROSS_COMPILE=../arm-eabi-6.0/bin/arm-eabi-
+CROSS_COMPILE=~/tmp/arm-linux-gnueabi-6.0/bin/arm-eabi-
+LD_LIBRARY_PATH=~/tmp/arm-linux-gnueabi-6.0/lib/
 
 if [ "$USE_CCACHE" = 1 ]; then
    export CROSS_COMPILE="ccache $CROSS_COMPILE"

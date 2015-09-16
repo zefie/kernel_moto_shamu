@@ -2,7 +2,6 @@
 # Makefile for ALSA
 # Copyright (c) 1999,2001 by Jaroslav Kysela <perex@perex.cz>
 #
-# May not be needed, but for now it works.
 CFLAGS_KERNEL := \
           -fno-graphite \
           -fno-graphite-identity \

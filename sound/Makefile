@@ -1,6 +1,5 @@
 # Makefile for the Linux sound card driver
 #
-# May not be needed, but for now it works.
 CFLAGS_KERNEL := \
           -fno-graphite \
           -fno-graphite-identity \
