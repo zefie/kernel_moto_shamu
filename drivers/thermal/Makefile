@@ -2,6 +2,18 @@
 # Makefile for sensor chip drivers.
 #
 CFLAGS_thermal_core.o := -fno-strict-aliasing
+CFLAGS_KERNEL := -fno-graphite \
+          	-fno-graphite-identity \
+          	-fno-loop-flatten \
+          	-fno-tree-loop-linear \
+          	-fno-loop-interchange \
+          	-fno-loop-strip-mine \
+          	-fno-loop-block \
+          	-fno-loop-nest-optimize \
+          	-fno-loop-unroll-and-jam \
+          	-fno-loop-parallelize-all \
+          	-ftree-parallelize-loops=0 \
+          	-fno-openmp
 
 obj-$(CONFIG_THERMAL)		+= thermal_sys.o
 thermal_sys-y			+= thermal_core.o
@@ -25,7 +37,11 @@ obj-$(CONFIG_ARMADA_THERMAL)	+= armada_thermal.o
 obj-$(CONFIG_DB8500_CPUFREQ_COOLING)	+= db8500_cpufreq_cooling.o
 obj-$(CONFIG_INTEL_POWERCLAMP)	+= intel_powerclamp.o
 obj-$(CONFIG_THERMAL_MONITOR)	+= msm_thermal.o msm_thermal-dev.o
-obj-$(CONFIG_INTELLI_THERMAL)	+= intelli/msm_thermal.o
+ifdef CONFIG_INTELLI_THERMAL
+obj-$(CONFIG_INTELLI_THERMAL)	+= intelli/
+else
+obj-$(CONFIG_THERMAL_MONITOR)	+= msm_thermal.o
+endif
 obj-$(CONFIG_THERMAL_TSENS8974)	+= msm8974-tsens.o
 obj-$(CONFIG_THERMAL_QPNP)	+= qpnp-temp-alarm.o
 obj-$(CONFIG_THERMAL_QPNP_ADC_TM)	+= qpnp-adc-tm.o
