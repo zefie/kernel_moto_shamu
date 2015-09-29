@@ -11,7 +11,7 @@ clear
 # Resources
 THREAD="-j10"
 KERNEL="zImage-dtb"
-DEFCONFIG="zefie_defconfig"
+DEFCONFIG="benzo_defconfig"
 
 # Kernel Details
 BC="benzoCore"
