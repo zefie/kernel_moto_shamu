@@ -405,6 +405,9 @@ static void cpufreq_interactive_timer(unsigned long data)
 		new_freq = pcpu->policy->cpuinfo.min_freq;
 	} else {
 		new_freq = choose_freq(pcpu, loadadjfreq);
+		if (new_freq > this_hispeed_freq &&
+				pcpu->target_freq < this_hispeed_freq)
+			new_freq = this_hispeed_freq;
 	}
 
 	if (boosted)
@@ -470,7 +473,8 @@ static void cpufreq_interactive_timer(unsigned long data)
 	if (new_freq == pcpu->policy->max)
 		pcpu->max_freq_hyst_start_time = now;
 
-	if (pcpu->target_freq == new_freq) {
+	if (pcpu->target_freq == new_freq &&
+			pcpu->target_freq <= pcpu->policy->cur) {
 		trace_cpufreq_interactive_already(
 			data, cpu_load, pcpu->target_freq,
 			pcpu->policy->cur, new_freq);
