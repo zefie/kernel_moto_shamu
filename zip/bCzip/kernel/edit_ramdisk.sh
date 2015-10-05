@@ -23,6 +23,11 @@ if  grep -qr forceencrypt /tmp/ramdisk/fstab.shamu; then
    sed -i "s/forceencrypt/encryptable/" /tmp/ramdisk/fstab.shamu
 fi
 
+#Gain write access on /system
+if  grep -qr ro.secure=1 /tmp/ramdisk/default.prop; then
+   sed -i "s/ro.secure=1/ro.secure=0/" /tmp/ramdisk/default.prop
+fi
+
 #add init.d support if not already supported
 #this is no longer needed as the ramdisk now inserts our modules, but we will
 #keep this here for user comfort, since having run-parts init.d support is a
