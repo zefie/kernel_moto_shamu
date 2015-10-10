@@ -2567,6 +2567,7 @@ static ssize_t mass_storage_cdrom_store(struct device *dev,
 
 static DEVICE_ATTR(cdrom, S_IWUSR, NULL, mass_storage_cdrom_store);
 */
+
 static struct device_attribute *mass_storage_function_attributes[] = {
 	&dev_attr_inquiry_string,
 	&dev_attr_luns,

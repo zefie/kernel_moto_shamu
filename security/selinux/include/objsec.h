@@ -25,7 +25,8 @@
 #include <linux/in.h>
 #include <linux/spinlock.h>
 #include <net/net_namespace.h>
-#include <linux/in6.h>
+#include "flask.h"
+#include "avc.h"
 
 struct task_security_struct {
 	u32 osid;		/* SID prior to last execve */
@@ -46,7 +47,6 @@ struct inode_security_struct {
 	u32 sid;		/* SID of this object */
 	u16 sclass;		/* security class of this object */
 	unsigned char initialized;	/* initialization flag */
-	u32 tag;		/* Per-File-Encryption tag */
 	struct mutex lock;
 };
 

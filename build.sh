@@ -15,7 +15,7 @@ DEFCONFIG="benzo_defconfig"
 
 # Kernel Details
 BC="benzoCore"
-VER="zefie-git-`date +%Y-%m-%d`"
+VER="zefie-M-git-`date +%Y-%m-%d`"
 BC_VER=$BC-$VER
 
 # Vars
