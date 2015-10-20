@@ -73,10 +73,6 @@ chmod 750 /tmp/ramdisk/init.shamu.power.rc
 cp /tmp/init.benzo.rc /tmp/ramdisk/init.benzo.rc
 chmod 750 /tmp/ramdisk/init.benzo.rc
 
-#copy benzo-post-boot
-mkdir /tmp/ramdisk/sbin
-cp /tmp/benzo-post-boot.sh /tmp/ramdisk/sbin/benzo-post-boot.sh
-chmod 750 /tmp/ramdisk/sbin/benzo-post-boot.sh
 
 rm /tmp/ramdisk/boot.img-ramdisk.gz
 rm /tmp/boot.img-ramdisk.gz
