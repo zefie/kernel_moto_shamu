@@ -1643,19 +1643,25 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 
 	if (mfd->panel.type == WRITEBACK_PANEL) {
 		ATRACE_BEGIN("wb_kickoff");
-		ret = mdss_mdp_wb_kickoff(mfd);
+		if (!need_cleanup) {
+			commit_cb.commit_cb_fnc = mdss_mdp_commit_cb;
+			commit_cb.data = mfd;
+			ret = mdss_mdp_wb_kickoff(mfd, &commit_cb);
+		} else {
+			mdss_mdp_wb_kickoff(mfd, NULL);
+		}
 		ATRACE_END("wb_kickoff");
-	} else if (!need_cleanup) {
-		commit_cb.commit_cb_fnc = mdss_mdp_commit_cb;
-		commit_cb.data = mfd;
-		ATRACE_BEGIN("display_commit");
-		ret = mdss_mdp_display_commit(mdp5_data->ctl, NULL,
-			&commit_cb);
-		ATRACE_END("display_commit");
 	} else {
 		ATRACE_BEGIN("display_commit");
-		ret = mdss_mdp_display_commit(mdp5_data->ctl, NULL,
-			NULL);
+		if (!need_cleanup) {
+			commit_cb.commit_cb_fnc = mdss_mdp_commit_cb;
+			commit_cb.data = mfd;
+			ret = mdss_mdp_display_commit(mdp5_data->ctl, NULL,
+				&commit_cb);
+		} else  {
+			ret = mdss_mdp_display_commit(mdp5_data->ctl, NULL,
+				NULL);
+		}
 		ATRACE_END("display_commit");
 	}
 
@@ -2181,12 +2187,6 @@ static void mdss_mdp_overlay_pan_display(struct msm_fb_data_type *mfd)
 		goto pan_display_error;
 	}
 
-	ret = mdss_mdp_overlay_start(mfd);
-	if (ret) {
-		pr_err("unable to start overlay %d (%d)\n", mfd->index, ret);
-		goto pan_display_error;
-	}
-
 	ret = mdss_mdp_overlay_get_fb_pipe(mfd, &pipe,
 					MDSS_MDP_MIXER_MUX_LEFT);
 	if (ret) {
@@ -2194,8 +2194,14 @@ static void mdss_mdp_overlay_pan_display(struct msm_fb_data_type *mfd)
 		goto pan_display_error;
 	}
 
-	if (mdss_mdp_pipe_map(pipe)) {
-		pr_err("unable to map base pipe\n");
+	if (ret) {
+		pr_err("unable to start overlay %d (%d)\n", mfd->index, ret);
+		goto pan_display_error;
+	}
+
+	ret = mdss_iommu_ctrl(1);
+	if (IS_ERR_VALUE(ret)) {
+		pr_err("IOMMU attach failed\n");
 		goto pan_display_error;
 	}
 

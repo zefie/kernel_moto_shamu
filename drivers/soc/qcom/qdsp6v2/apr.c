@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -42,6 +42,7 @@ static struct apr_client client[APR_DEST_MAX][APR_CLIENT_MAX];
 
 static wait_queue_head_t dsp_wait;
 static wait_queue_head_t modem_wait;
+static bool is_modem_up;
 /* Subsystem restart: QDSP6 data, functions */
 static struct workqueue_struct *apr_reset_workqueue;
 static void apr_reset_deregister(struct work_struct *work);
@@ -330,9 +331,12 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 
 	if (!strcmp(dest, "ADSP"))
 		domain_id = APR_DOMAIN_ADSP;
-	else if (!strcmp(dest, "MODEM"))
+	else if (!strcmp(dest, "MODEM")) {
+		/* Register voice services if destination permits */
+		if (!apr_register_voice_svc())
+			goto done;
 		domain_id = APR_DOMAIN_MODEM;
-	else {
+	} else {
 		pr_err("APR: wrong destination\n");
 		goto done;
 	}
@@ -347,6 +351,11 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 		pr_debug("%s: adsp Up\n", __func__);
 	} else if (dest_id == APR_DEST_MODEM) {
 		if (apr_get_modem_state() == APR_SUBSYS_DOWN) {
+			if (is_modem_up) {
+				pr_err("%s: modem shutdown due to SSR, ret",
+					__func__);
+				return NULL;
+			}
 			pr_debug("%s: Wait for modem to bootup\n", __func__);
 			rc = apr_wait_for_device_up(APR_DEST_MODEM);
 			if (rc == 0) {
@@ -383,7 +392,6 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 		pr_err("APR: Service needs reset\n");
 		goto done;
 	}
-	svc->priv = priv;
 	svc->id = svc_id;
 	svc->dest_id = dest_id;
 	svc->client_id = client_id;
@@ -408,6 +416,7 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 			svc->fn = svc_fn;
 			if (svc->port_cnt)
 				svc->svc_cnt++;
+			svc->priv = priv;
 		}
 	}
 
@@ -540,7 +549,7 @@ void apr_cb_func(void *buf, int len, void *priv)
 	if (data.payload_size > 0)
 		data.payload = (char *)hdr + hdr_size;
 
-	temp_port = ((data.src_port >> 8) * 8) + (data.src_port & 0xFF);
+	temp_port = ((data.dest_port >> 8) * 8) + (data.dest_port & 0xFF);
 	pr_debug("port = %d t_port = %d\n", data.src_port, temp_port);
 	if (c_svc->port_cnt && c_svc->port_fn[temp_port])
 		c_svc->port_fn[temp_port](&data,  c_svc->port_priv[temp_port]);
@@ -674,7 +683,7 @@ void apr_reset(void *handle)
 }
 
 /* Dispatch the Reset events to Modem and audio clients */
-void dispatch_event(unsigned long code, unsigned short proc)
+void dispatch_event(unsigned long code, uint16_t proc)
 {
 	struct apr_client *apr_client;
 	struct apr_client_data data;
@@ -684,7 +693,9 @@ void dispatch_event(unsigned long code, unsigned short proc)
 
 	data.opcode = RESET_EVENTS;
 	data.reset_event = code;
-	data.reset_proc = proc;
+
+	/* Service domain can be different from the processor */
+	data.reset_proc = apr_get_reset_domain(proc);
 
 	clnt = APR_CLIENT_AUDIO;
 	apr_client = &client[proc][clnt];
@@ -751,6 +762,7 @@ static int modem_notifier_cb(struct notifier_block *this, unsigned long code,
 		if (apr_cmpxchg_modem_state(APR_SUBSYS_DOWN, APR_SUBSYS_UP) ==
 						APR_SUBSYS_DOWN)
 			wake_up(&modem_wait);
+		is_modem_up = 1;
 		pr_debug("M-Notify: Bootup Completed\n");
 		break;
 	default:

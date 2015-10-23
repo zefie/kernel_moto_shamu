@@ -932,6 +932,8 @@ static int tomtom_config_gain_compander(struct snd_soc_codec *codec,
 	case COMPANDER_0:
 		snd_soc_update_bits(codec, TOMTOM_A_SPKR_DRV1_GAIN,
 				    1 << 2, !enable << 2);
+		snd_soc_update_bits(codec, TOMTOM_A_SPKR_DRV2_GAIN,
+				    1 << 2, !enable << 2);
 		break;
 	case COMPANDER_1:
 		snd_soc_update_bits(codec, TOMTOM_A_RX_HPH_L_GAIN,
@@ -1009,9 +1011,8 @@ static int tomtom_config_compander(struct snd_soc_dapm_widget *w,
 	if (!tomtom->comp_enabled[comp])
 		return 0;
 
-	/* Compander 0 has single channel */
-	mask = (comp == COMPANDER_0 ? 0x01 : 0x03);
-	enable_mask = (comp == COMPANDER_0 ? 0x02 : 0x03);
+	/* Compander 0 has two channels */
+	mask = enable_mask = 0x03;
 	buck_mv = tomtom_codec_get_buck_mv(codec);
 
 	switch (event) {
@@ -5692,12 +5693,6 @@ static int tomtom_codec_enable_ear_pa(struct snd_soc_dapm_widget *w,
 
 		usleep_range(5000, 5100);
 		break;
-	case SND_SOC_DAPM_POST_PMD:
-		wcd9xxx_clsh_fsm(codec, &tomtom_p->clsh_d,
-						 WCD9XXX_CLSH_STATE_EAR,
-						 WCD9XXX_CLSH_REQ_DISABLE,
-						 WCD9XXX_CLSH_EVENT_POST_PA);
-		usleep_range(5000, 5100);
 	}
 	return 0;
 }
@@ -5716,9 +5711,19 @@ static int tomtom_codec_ear_dac_event(struct snd_soc_dapm_widget *w,
 						 WCD9XXX_CLSH_STATE_EAR,
 						 WCD9XXX_CLSH_REQ_ENABLE,
 						 WCD9XXX_CLSH_EVENT_PRE_DAC);
+		snd_soc_update_bits(codec, w->reg, 0x20, 0x20);
+		break;
+	case SND_SOC_DAPM_POST_PMD:
+		snd_soc_update_bits(codec, w->reg, 0x20, 0x00);
+		wcd9xxx_clsh_fsm(codec, &tomtom_p->clsh_d,
+						 WCD9XXX_CLSH_STATE_EAR,
+						 WCD9XXX_CLSH_REQ_DISABLE,
+						 WCD9XXX_CLSH_EVENT_POST_PA);
+		usleep_range(5000, 5100);
+		break;
+	default:
 		break;
 	}
-
 	return 0;
 }
 
@@ -5806,12 +5811,11 @@ static const struct snd_soc_dapm_widget tomtom_dapm_widgets[] = {
 	SND_SOC_DAPM_OUTPUT("EAR"),
 
 	SND_SOC_DAPM_PGA_E("EAR PA", TOMTOM_A_RX_EAR_EN, 4, 0, NULL, 0,
-			tomtom_codec_enable_ear_pa, SND_SOC_DAPM_POST_PMU |
-			SND_SOC_DAPM_POST_PMD),
+			tomtom_codec_enable_ear_pa, SND_SOC_DAPM_POST_PMU),
 
 	SND_SOC_DAPM_MIXER_E("DAC1", TOMTOM_A_RX_EAR_EN, 6, 0, dac1_switch,
 		ARRAY_SIZE(dac1_switch), tomtom_codec_ear_dac_event,
-		SND_SOC_DAPM_PRE_PMU),
+		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 
 	SND_SOC_DAPM_AIF_IN_E("AIF1 PB", "AIF1 Playback", 0, SND_SOC_NOPM,
 				AIF1_PB, 0, tomtom_codec_enable_slimrx,
@@ -6355,6 +6359,22 @@ static irqreturn_t tomtom_slimbus_irq(int irq, void *data)
 		port_id = (tx ? j - 16 : j);
 		val = wcd9xxx_interface_reg_read(codec->control_data,
 				TOMTOM_SLIM_PGD_PORT_INT_RX_SOURCE0 + j);
+		if (val) {
+			if (!tx)
+				reg = TOMTOM_SLIM_PGD_PORT_INT_EN0 +
+					(port_id / 8);
+			else
+				reg = TOMTOM_SLIM_PGD_PORT_INT_TX_EN0 +
+					(port_id / 8);
+			int_val = wcd9xxx_interface_reg_read(
+				codec->control_data, reg);
+			/*
+			 * Ignore interrupts for ports for which the
+			 * interrupts are not specifically enabled.
+			 */
+			if (!(int_val & (1 << (port_id % 8))))
+				continue;
+		}
 		if (val & TOMTOM_SLIM_IRQ_OVERFLOW)
 			pr_err_ratelimited(
 			   "%s: overflow error on %s port %d, value %x\n",
@@ -6877,6 +6897,10 @@ static const struct wcd9xxx_reg_mask_val tomtom_codec_2_0_reg_init_val[] = {
 	{TOMTOM_A_RX_HPH_R_TEST, 0x08, 0x00},
 	{TOMTOM_A_CDC_CLIP_ADJ_SPKR_MIN_CLIP_THRESHOLD, 0xFF, 0x00},
 	{TOMTOM_A_CDC_CLIP_ADJ_SPKR2_MIN_CLIP_THRESHOLD, 0xFF, 0x00},
+	{TOMTOM_A_CDC_CLIP_ADJ_SPKR_BOOST_GATING, 0x01, 0x01},
+	{TOMTOM_A_CDC_CLIP_ADJ_SPKR2_BOOST_GATING, 0x01, 0x01},
+	{TOMTOM_A_CDC_CLIP_ADJ_SPKR_B1_CTL, 0x01, 0x00},
+	{TOMTOM_A_CDC_CLIP_ADJ_SPKR2_B1_CTL, 0x01, 0x00},
 };
 
 static void tomtom_codec_init_reg(struct snd_soc_codec *codec)
@@ -7409,8 +7433,8 @@ static enum wcd9xxx_cdc_type tomtom_get_cdc_type(void)
 
 static bool tomtom_mbhc_ins_rem_status(struct snd_soc_codec *codec)
 {
-	return snd_soc_read(codec, WCD9XXX_A_MBHC_INSERT_DET_STATUS) &
-			    (1 << 1);
+	return !(snd_soc_read(codec, WCD9XXX_A_MBHC_INSERT_DET_STATUS) &
+			    (1 << 4));
 }
 
 static void tomtom_mbhc_micb_pulldown_ctrl(struct wcd9xxx_mbhc *mbhc,
@@ -7578,10 +7602,12 @@ static const struct snd_soc_dapm_widget tomtom_1_dapm_widgets[] = {
 			   SND_SOC_DAPM_POST_PMD),
 	SND_SOC_DAPM_ADC_E("ADC5", NULL, TOMTOM_A_TX_5_GAIN, 7, 0,
 			   tomtom_codec_enable_adc,
-			   SND_SOC_DAPM_POST_PMU),
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			   SND_SOC_DAPM_POST_PMD),
 	SND_SOC_DAPM_ADC_E("ADC6", NULL, TOMTOM_A_TX_6_GAIN, 7, 0,
 			   tomtom_codec_enable_adc,
-			   SND_SOC_DAPM_POST_PMU),
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			   SND_SOC_DAPM_POST_PMD),
 };
 
 static struct regulator *tomtom_codec_find_regulator(struct snd_soc_codec *cdc,
@@ -7767,8 +7793,7 @@ static int tomtom_codec_probe(struct snd_soc_codec *codec)
 	else if (wcd9xxx->mclk_rate == TOMTOM_MCLK_CLK_9P6MHZ)
 		snd_soc_update_bits(codec, TOMTOM_A_CHIP_CTL, 0x06, 0x2);
 	tomtom_codec_init_reg(codec);
-	/* set QFuse for LAB FIFO detection */
-	snd_soc_write(codec, TOMTOM_A_QFUSE_CTL, 0x3);
+
 	ret = tomtom_handle_pdata(tomtom);
 	if (IS_ERR_VALUE(ret)) {
 		pr_err("%s: bad pdata\n", __func__);

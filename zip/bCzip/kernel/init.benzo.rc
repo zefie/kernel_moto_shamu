@@ -1,14 +1,3 @@
-
-service supolicy /sbin/supolicy --live \
-	"allow sensors diag_device chr_file { read write open ioctl }" \
-	"allow sensors sensors capability net_raw" \
-	"allow init kernel security setenforce"
-     disabled
-     oneshot
-
-on fs
-     start supolicy
-
 on boot
     # Wake Gestures
     chown system system /sys/android_touch/doubletap2wake
@@ -32,15 +21,6 @@ on boot
     chmod 0644 /sys/module/adreno_idler/parameters/adreno_idler_idewait
     chown system system /sys/module/adreno_idler/parameters/adreno_idler_ideworkload
     chmod 0644 /sys/module/adreno_idler/parameters/adreno_idler_ideworkload
-
-service benzo-post-boot /sbin/benzo-post-boot.sh
-     class late_start
-     user root
-     disabled
-     oneshot
-
-on property:sys.boot_completed=1
-     start benzo-post-boot
 
 on property:dev.bootcomplete=1
 	stop mpdecision

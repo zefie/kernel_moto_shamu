@@ -183,6 +183,7 @@ static int msm_compr_set_volume(struct snd_compr_stream *cstream,
 {
 	struct msm_compr_audio *prtd;
 	int rc = 0;
+	uint32_t avg_vol;
 
 	pr_debug("%s: volume_l %d volume_r %d\n",
 		__func__, volume_l, volume_r);
@@ -191,25 +192,43 @@ static int msm_compr_set_volume(struct snd_compr_stream *cstream,
 		return -EPERM;
 	}
 	prtd = cstream->runtime->private_data;
-	if (prtd && prtd->audio_client) {
-		if (prtd->compr_passthr != LEGACY_PCM) {
-			pr_debug("%s: No volume config for passthrough %d\n",
-				 __func__, prtd->compr_passthr);
-			return rc;
-		}
-		if (volume_l != volume_r) {
-			pr_debug("%s: call q6asm_set_lrgain\n", __func__);
-			rc = q6asm_set_lrgain(prtd->audio_client,
-						volume_l, volume_r);
-		} else {
-			pr_debug("%s: call q6asm_set_volume\n", __func__);
-			rc = q6asm_set_volume(prtd->audio_client, volume_l);
-		}
-		if (rc < 0) {
-			pr_err("%s: Send Volume command failed rc=%d\n",
-				__func__, rc);
-		}
+
+	if (!prtd || !prtd->audio_client) {
+		pr_err("%s: invalid session prtd or no audio client", __func__);
+		return rc;
 	}
+
+	if (prtd->compr_passthr != LEGACY_PCM) {
+		pr_debug("%s: No volume config for passthrough %d\n",
+			 __func__, prtd->compr_passthr);
+		return rc;
+	}
+
+	if (prtd->num_channels > 2) {
+		/*
+		 * Currently the left and right gains are averaged an applied
+		 * to all channels. This might not be desirable. But currently,
+		 * there exists no API in userspace to send a list of gains for
+		 * each channel either. If such an API does become available,
+		 * the mixer control must be updated to accept more than 2
+		 * channel gains.
+		 *
+		 */
+		pr_debug("%s: call q6asm_set_volume for multichannel\n",
+			 __func__);
+		avg_vol = (volume_l + volume_r) / 2;
+		rc = q6asm_set_volume(prtd->audio_client, avg_vol);
+	} else {
+		pr_debug("%s: call q6asm_set_lrgain\n", __func__);
+		rc = q6asm_set_lrgain(prtd->audio_client, volume_l, volume_r);
+		if (rc < 0)
+			pr_err("%s: Send LR gain command failed rc=%d\n",
+				__func__, rc);
+	}
+
+	if (rc < 0)
+		pr_err("%s: Send vol gain command failed rc=%d\n",
+		       __func__, rc);
 
 	return rc;
 }
@@ -302,12 +321,19 @@ static void compr_event_handler(uint32_t opcode,
 		uint32_t token, uint32_t *payload, void *priv)
 {
 	struct msm_compr_audio *prtd = priv;
-	struct snd_compr_stream *cstream = prtd->cstream;
-	struct audio_client *ac = prtd->audio_client;
+	struct snd_compr_stream *cstream;
+	struct audio_client *ac;
 	uint32_t chan_mode = 0;
 	uint32_t sample_rate = 0;
 	int bytes_available, stream_id;
 	uint32_t stream_index;
+
+	if (!prtd) {
+		pr_err("%s: prtd is NULL\n", __func__);
+		return;
+	}
+	cstream = prtd->cstream;
+	ac = prtd->audio_client;
 
 	pr_debug("%s opcode =%08x\n", __func__, opcode);
 	switch (opcode) {
@@ -319,8 +345,17 @@ static void compr_event_handler(uint32_t opcode,
 				"byte_offset=%d, copied_total=%d, token=%d\n",
 			       payload[3],
 			       payload[0],
-				prtd->byte_offset, prtd->copied_total, token);
-			atomic_set(&prtd->start, 0);
+ 			       prtd->byte_offset, prtd->copied_total, token);
+
+			if (atomic_read(&prtd->drain) && prtd->last_buffer) {
+				pr_debug("wake up on drain\n");
+				prtd->drain_ready = 1;
+				wake_up(&prtd->drain_wait);
+				atomic_set(&prtd->drain, 0);
+				prtd->last_buffer = 0;
+			} else {
+				atomic_set(&prtd->start, 0);
+			}
 		} else {
 			pr_debug("ASM_DATA_EVENT_WRITE_DONE_V2 offset %d, length %d\n",
 				 prtd->byte_offset, token);
@@ -750,6 +785,7 @@ static int msm_compr_open(struct snd_compr_stream *cstream)
 		return -ENOMEM;
 	}
 
+	runtime->private_data = NULL;
 	prtd->cstream = cstream;
 	pdata->cstream[rtd->dai_link->be_id] = cstream;
 	pdata->audio_effects[rtd->dai_link->be_id] =
@@ -841,18 +877,39 @@ static int msm_compr_open(struct snd_compr_stream *cstream)
 
 static int msm_compr_free(struct snd_compr_stream *cstream)
 {
-	struct snd_compr_runtime *runtime = cstream->runtime;
-	struct msm_compr_audio *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *soc_prtd = cstream->private_data;
-	struct msm_compr_pdata *pdata =
-			snd_soc_platform_get_drvdata(soc_prtd->platform);
-	struct audio_client *ac = prtd->audio_client;
+	struct snd_compr_runtime *runtime;
+	struct msm_compr_audio *prtd;
+	struct snd_soc_pcm_runtime *soc_prtd;
+	struct msm_compr_pdata *pdata;
+	struct audio_client *ac;
 	int dir = IN, ret = 0, stream_id;
 	unsigned long flags;
 	uint32_t stream_index;
 
 	pr_debug("%s\n", __func__);
 
+	if (!cstream) {
+		pr_err("%s cstream is null\n", __func__);
+		return 0;
+	}
+	runtime = cstream->runtime;
+	soc_prtd = cstream->private_data;
+	if (!runtime || !soc_prtd || !(soc_prtd->platform)) {
+		pr_err("%s runtime or soc_prtd or platform is null\n",
+			__func__);
+		return 0;
+	}
+	prtd = runtime->private_data;
+	if (!prtd) {
+		pr_err("%s prtd is null\n", __func__);
+		return 0;
+	}
+	pdata = snd_soc_platform_get_drvdata(soc_prtd->platform);
+	ac = prtd->audio_client;
+	if (!pdata || !ac) {
+		pr_err("%s pdata or ac is null\n", __func__);
+		return 0;
+	}
 	if (atomic_read(&prtd->eos)) {
 		ret = wait_event_timeout(prtd->eos_wait,
 					 prtd->cmd_ack, 5 * HZ);
@@ -934,6 +991,7 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 	struct msm_compr_audio *prtd = runtime->private_data;
 	int ret = 0, frame_sz = 0, delay_time_ms = 0;
 	int i, num_rates;
+	bool is_format_gapless = false;
 
 	pr_debug("%s\n", __func__);
 
@@ -961,6 +1019,7 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 	case SND_AUDIOCODEC_PCM: {
 		pr_debug("SND_AUDIOCODEC_PCM\n");
 		prtd->codec = FORMAT_LINEAR_PCM;
+		is_format_gapless = true;
 		break;
 	}
 
@@ -968,6 +1027,7 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 		pr_debug("SND_AUDIOCODEC_MP3\n");
 		prtd->codec = FORMAT_MP3;
 		frame_sz = MP3_OUTPUT_FRAME_SZ;
+		is_format_gapless = true;
 		break;
 	}
 
@@ -975,6 +1035,7 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 		pr_debug("SND_AUDIOCODEC_AAC\n");
 		prtd->codec = FORMAT_MPEG4_AAC;
 		frame_sz = AAC_OUTPUT_FRAME_SZ;
+		is_format_gapless = true;
 		break;
 	}
 
@@ -982,6 +1043,7 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 		pr_debug("SND_AUDIOCODEC_AC3\n");
 		prtd->codec = FORMAT_AC3;
 		frame_sz = AC3_OUTPUT_FRAME_SZ;
+		is_format_gapless = true;
 		break;
 	}
 
@@ -989,6 +1051,7 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 		pr_debug("SND_AUDIOCODEC_EAC3\n");
 		prtd->codec = FORMAT_EAC3;
 		frame_sz = EAC3_OUTPUT_FRAME_SZ;
+		is_format_gapless = true;
 		break;
 	}
 
@@ -1015,10 +1078,16 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 		return -EINVAL;
 	}
 
-	delay_time_ms = ((DSP_NUM_OUTPUT_FRAME_BUFFERED * frame_sz * 1000) /
+	if (!is_format_gapless) {
+		prtd->gapless_state.use_dsp_gapless_mode = false;
+	} else {
+		delay_time_ms =
+			((DSP_NUM_OUTPUT_FRAME_BUFFERED * frame_sz * 1000) /
 			prtd->sample_rate) + DSP_PP_BUFFERING_IN_MSEC;
-	delay_time_ms = delay_time_ms > PARTIAL_DRAIN_ACK_EARLY_BY_MSEC ?
+		delay_time_ms =
+			delay_time_ms > PARTIAL_DRAIN_ACK_EARLY_BY_MSEC ?
 			delay_time_ms - PARTIAL_DRAIN_ACK_EARLY_BY_MSEC : 0;
+	}
 	prtd->partial_drain_delay = delay_time_ms;
 
 	memcpy(&prtd->codec_param, params, sizeof(struct snd_compr_params));
@@ -1128,14 +1197,9 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 	case SNDRV_PCM_TRIGGER_START:
 		pr_debug("%s: SNDRV_PCM_TRIGGER_START\n", __func__);
 		atomic_set(&prtd->start, 1);
-		q6asm_run_nowait(prtd->audio_client, 0, 0, 0);
 
-		msm_compr_set_volume(cstream, 0, 0);
-		if (rc)
-			pr_err("%s : Set Volume (0,0) failed : %d\n",
-				__func__, rc);
-
-		msm_compr_set_volume(cstream, volume[0], volume[1]);
+		/* set volume for the stream before RUN */
+		rc = msm_compr_set_volume(cstream, volume[0], volume[1]);
 		if (rc)
 			pr_err("%s : Set Volume failed : %d\n",
 				__func__, rc);
@@ -1148,6 +1212,8 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			mmifx[fe_id].cmds = 0;
 		}
 
+		/* issue RUN command for the stream */
+		q6asm_run_nowait(prtd->audio_client, 0, 0, 0);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 		spin_lock_irqsave(&prtd->lock, flags);
@@ -1757,8 +1823,10 @@ static int msm_compr_set_metadata(struct snd_compr_stream *cstream,
 		return -EINVAL;
 
 	prtd = cstream->runtime->private_data;
-	if (!prtd && !prtd->audio_client)
+	if (!prtd || !prtd->audio_client) {
+		pr_err("%s: prtd or audio client is NULL\n", __func__);
 		return -EINVAL;
+	}
 	if (prtd->compr_passthr != LEGACY_PCM) {
 		pr_debug("%s: No trailing silence for compress_type[%d]\n",
 			__func__, prtd->compr_passthr);

@@ -28,6 +28,14 @@ if  grep -qr ro.secure=1 /tmp/ramdisk/default.prop; then
    sed -i "s/ro.secure=1/ro.secure=0/" /tmp/ramdisk/default.prop
 fi
 
+#remove verify
+if  grep -qr verity_load_state /tmp/ramdisk/init.shamu.rc; then
+ sed -i "s/verity_load_state/#verity_load_state/" /tmp/ramdisk/init.shamu.rc
+fi
+if  grep -qr verity_update_state /tmp/ramdisk/init.shamu.rc; then
+ sed -i "s/verity_update_state/#verity_update_state/" /tmp/ramdisk/init.shamu.rc
+fi
+
 #add init.d support if not already supported
 #this is no longer needed as the ramdisk now inserts our modules, but we will
 #keep this here for user comfort, since having run-parts init.d support is a
@@ -73,10 +81,6 @@ chmod 750 /tmp/ramdisk/init.shamu.power.rc
 cp /tmp/init.benzo.rc /tmp/ramdisk/init.benzo.rc
 chmod 750 /tmp/ramdisk/init.benzo.rc
 
-#copy benzo-post-boot
-mkdir /tmp/ramdisk/sbin
-cp /tmp/benzo-post-boot.sh /tmp/ramdisk/sbin/benzo-post-boot.sh
-chmod 750 /tmp/ramdisk/sbin/benzo-post-boot.sh
 
 rm /tmp/ramdisk/boot.img-ramdisk.gz
 rm /tmp/boot.img-ramdisk.gz

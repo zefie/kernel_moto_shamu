@@ -1136,6 +1136,24 @@ static const struct soc_enum class_h_dsm_enum =
 static const struct snd_kcontrol_new class_h_dsm_mux =
 	SOC_DAPM_ENUM("CLASS_H_DSM MUX Mux", class_h_dsm_enum);
 
+static const char * const rx1_interpolator_text[] = {
+	"ZERO", "RX1 MIX2"
+};
+static const struct soc_enum rx1_interpolator_enum =
+	SOC_ENUM_SINGLE(TAIKO_A_CDC_CLK_RX_B1_CTL, 0, 2, rx1_interpolator_text);
+
+static const struct snd_kcontrol_new rx1_interpolator =
+	SOC_DAPM_ENUM("RX1 INTERP Mux", rx1_interpolator_enum);
+
+static const char * const rx2_interpolator_text[] = {
+	"ZERO", "RX2 MIX2"
+};
+static const struct soc_enum rx2_interpolator_enum =
+	SOC_ENUM_SINGLE(TAIKO_A_CDC_CLK_RX_B1_CTL, 1, 2, rx2_interpolator_text);
+
+static const struct snd_kcontrol_new rx2_interpolator =
+	SOC_DAPM_ENUM("RX2 INTERP Mux", rx2_interpolator_enum);
+
 static const char *const taiko_conn_mad_text[] = {
 	"ADC_MB", "ADC1", "ADC2", "ADC3", "ADC4", "ADC5", "ADC6", "NOTUSED1",
 	"DMIC1", "DMIC2", "DMIC3", "DMIC4", "DMIC5", "DMIC6", "NOTUSED2",
@@ -1592,6 +1610,7 @@ static const struct snd_kcontrol_new taiko_2_x_analog_gain_controls[] = {
 static int taiko_hph_impedance_get(struct snd_kcontrol *kcontrol,
 				   struct snd_ctl_elem_value *ucontrol)
 {
+#if !defined CONFIG_SND_SOC_TPA6165A2 && !defined CONFIG_SND_SOC_FSA8500
 	uint32_t zl, zr;
 	bool hphr;
 	struct soc_multi_mixer_control *mc;
@@ -1601,14 +1620,12 @@ static int taiko_hph_impedance_get(struct snd_kcontrol *kcontrol,
 	mc = (struct soc_multi_mixer_control *)(kcontrol->private_value);
 
 	hphr = mc->shift;
-	pr_debug("%s: taiko_priv: %p\n", __func__, priv);
-#if !defined CONFIG_SND_SOC_TPA6165A2 && !defined CONFIG_SND_SOC_FSA8500
 	wcd9xxx_mbhc_get_impedance(&priv->mbhc, &zl, &zr);
 	pr_debug("%s: zl %u, zr %u\n", __func__, zl, zr);
-#else
-	zr = zl = 0;
-#endif
 	ucontrol->value.integer.value[0] = hphr ? zr : zl;
+#else
+	ucontrol->value.integer.value[0] = 0;
+#endif
 
 	return 0;
 }
@@ -3143,8 +3160,6 @@ static int taiko_codec_enable_vdd_spkr(struct snd_soc_dapm_widget *w,
 
 	pr_debug("%s: %d %s\n", __func__, event, w->name);
 
-	WARN_ONCE(!priv->spkdrv_reg, "SPKDRV supply %s isn't defined\n",
-		  WCD9XXX_VDD_SPKDRV_NAME);
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
 		if (priv->spkdrv_reg) {
@@ -3298,8 +3313,10 @@ static int taiko_hphl_dac_event(struct snd_soc_dapm_widget *w,
 {
 	struct snd_soc_codec *codec = w->codec;
 	struct taiko_priv *taiko_p = snd_soc_codec_get_drvdata(codec);
+#if !defined CONFIG_SND_SOC_TPA6165A2 && !defined CONFIG_SND_SOC_FSA8500
 	uint32_t impedl, impedr;
 	int ret = 0;
+#endif
 
 	pr_debug("%s %s %d\n", __func__, w->name, event);
 
@@ -3318,7 +3335,9 @@ static int taiko_hphl_dac_event(struct snd_soc_dapm_widget *w,
 						WCD9XXX_CLSAB_REQ_ENABLE);
 		}
 
-#if !defined CONFIG_SND_SOC_TPA6165A2 && !defined CONFIG_SND_SOC_FSA8500
+#if defined CONFIG_SND_SOC_TPA6165A2 || defined CONFIG_SND_SOC_FSA8500
+		wcd9xxx_clsh_imped_config(codec, 0);
+#else
 		ret = wcd9xxx_mbhc_get_impedance(&taiko_p->mbhc,
 					&impedl, &impedr);
 		if (!ret)
@@ -3326,14 +3345,12 @@ static int taiko_hphl_dac_event(struct snd_soc_dapm_widget *w,
 		else
 			dev_err(codec->dev, "Failed to get mbhc impedance %d\n",
 						ret);
-#else
-		impedl = impedr = 0;
-		ret = 0;
 #endif
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		snd_soc_update_bits(codec, TAIKO_A_CDC_CLK_RDAC_CLK_EN_CTL,
 							0x02, 0x00);
+		break;
 	}
 	return 0;
 }
@@ -3862,8 +3879,11 @@ static const struct snd_soc_dapm_route audio_map[] = {
 
 	{"CLASS_H_DSM MUX", "DSM_HPHL_RX1", "RX1 CHAIN"},
 
-	{"RX1 CHAIN", NULL, "RX1 MIX2"},
-	{"RX2 CHAIN", NULL, "RX2 MIX2"},
+	{"RX1 INTERP", NULL, "RX1 MIX2"},
+	{"RX1 CHAIN", NULL, "RX1 INTERP"},
+	{"RX2 INTERP", NULL, "RX2 MIX2"},
+	{"RX2 CHAIN", NULL, "RX2 INTERP"},
+
 	{"RX1 MIX2", NULL, "ANC1 MUX"},
 	{"RX2 MIX2", NULL, "ANC2 MUX"},
 
@@ -5547,12 +5567,9 @@ static const struct snd_soc_dapm_widget taiko_dapm_widgets[] = {
 	SND_SOC_DAPM_MIXER("RX2 MIX1", SND_SOC_NOPM, 0, 0, NULL, 0),
 	SND_SOC_DAPM_MIXER("RX7 MIX1", SND_SOC_NOPM, 0, 0, NULL, 0),
 
-	SND_SOC_DAPM_MIXER_E("RX1 MIX2", TAIKO_A_CDC_CLK_RX_B1_CTL, 0, 0, NULL,
-		0, taiko_codec_enable_interpolator, SND_SOC_DAPM_PRE_PMU |
-		SND_SOC_DAPM_POST_PMU),
-	SND_SOC_DAPM_MIXER_E("RX2 MIX2", TAIKO_A_CDC_CLK_RX_B1_CTL, 1, 0, NULL,
-		0, taiko_codec_enable_interpolator, SND_SOC_DAPM_PRE_PMU |
-		SND_SOC_DAPM_POST_PMU),
+	SND_SOC_DAPM_MIXER("RX1 MIX2", SND_SOC_NOPM, 0, 0, NULL, 0),
+	SND_SOC_DAPM_MIXER("RX2 MIX2", SND_SOC_NOPM, 0, 0, NULL, 0),
+
 	SND_SOC_DAPM_MIXER_E("RX3 MIX1", TAIKO_A_CDC_CLK_RX_B1_CTL, 2, 0, NULL,
 		0, taiko_codec_enable_interpolator, SND_SOC_DAPM_PRE_PMU |
 		SND_SOC_DAPM_POST_PMU),
@@ -5569,6 +5586,12 @@ static const struct snd_soc_dapm_widget taiko_dapm_widgets[] = {
 		0, taiko_codec_enable_interpolator, SND_SOC_DAPM_PRE_PMU |
 		SND_SOC_DAPM_POST_PMU),
 
+	SND_SOC_DAPM_MUX_E("RX1 INTERP", TAIKO_A_CDC_CLK_RX_B1_CTL, 0, 0,
+		&rx1_interpolator, taiko_codec_enable_interpolator,
+		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU),
+	SND_SOC_DAPM_MUX_E("RX2 INTERP", TAIKO_A_CDC_CLK_RX_B1_CTL, 1, 0,
+		&rx2_interpolator, taiko_codec_enable_interpolator,
+		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU),
 
 	SND_SOC_DAPM_MIXER("RX1 CHAIN", TAIKO_A_CDC_RX1_B6_CTL, 5, 0, NULL, 0),
 	SND_SOC_DAPM_MIXER("RX2 CHAIN", TAIKO_A_CDC_RX2_B6_CTL, 5, 0, NULL, 0),
