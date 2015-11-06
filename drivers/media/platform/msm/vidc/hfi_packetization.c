@@ -1353,21 +1353,12 @@ int create_pkt_cmd_session_set_property(
 	case HAL_CONFIG_VENC_INTRA_PERIOD:
 	{
 		struct hfi_intra_period *hfi;
-		int period = 0;
 		pkt->rg_property_data[0] =
 			HFI_PROPERTY_CONFIG_VENC_INTRA_PERIOD;
 		hfi = (struct hfi_intra_period *) &pkt->rg_property_data[1];
 		memcpy(hfi, (struct hfi_intra_period *) pdata,
 				sizeof(struct hfi_intra_period));
 		pkt->size += sizeof(u32) + sizeof(struct hfi_intra_period);
-		period = hfi->pframes + hfi->bframes + 1;
-		if (hfi->bframes) {
-			hfi->pframes = period / (hfi->bframes + 1);
-			hfi->bframes = period - hfi->pframes;
-		} else {
-			hfi->pframes = period - 1;
-			hfi->bframes = 0;
-		}
 		break;
 	}
 	case HAL_CONFIG_VENC_IDR_PERIOD:
@@ -1726,6 +1717,16 @@ int create_pkt_cmd_session_set_property(
 		memcpy(hfi->csc_limit, hal->csc_limit, sizeof(hfi->csc_limit));
 		pkt->size += sizeof(u32) +
 				sizeof(struct hfi_vpe_color_space_conversion);
+		break;
+	}
+	case HAL_PARAM_VENC_DISABLE_RC_TIMESTAMP:
+	{
+		struct hfi_enable *hfi;
+		pkt->rg_property_data[0] =
+			HFI_PROPERTY_PARAM_VENC_DISABLE_RC_TIMESTAMP;
+		hfi = (struct hfi_enable *)&pkt->rg_property_data[1];
+		hfi->enable = ((struct hfi_enable *)pdata)->enable;
+		pkt->size += sizeof(u32) * 2;
 		break;
 	}
 	case HAL_PARAM_VENC_ENABLE_INITIAL_QP:

@@ -213,6 +213,7 @@ enum hal_property {
 	HAL_CONFIG_VENC_PERF_MODE,
 	HAL_PARAM_VENC_HIER_B_MAX_ENH_LAYERS,
 	HAL_PARAM_VENC_HIER_P_HYBRID_MODE,
+	HAL_PARAM_VENC_DISABLE_RC_TIMESTAMP,
 };
 
 enum hal_domain {
@@ -1340,12 +1341,9 @@ struct hfi_device {
 			int *domain_num, int *partition_num);
 	int (*load_fw)(void *dev);
 	void (*unload_fw)(void *dev);
-	int (*resurrect_fw)(void *dev);
 	int (*get_fw_info)(void *dev, enum fw_info info);
 	int (*get_stride_scanline)(int color_fmt, int width,
 		int height,	int *stride, int *scanlines);
-	int (*capability_check)(u32 fourcc, u32 width,
-		u32 *max_width, u32 *max_height);
 	int (*session_clean)(void *sess);
 	int (*get_core_capabilities)(void);
 	int (*power_enable)(void *dev);
