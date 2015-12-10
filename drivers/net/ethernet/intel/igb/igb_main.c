@@ -2378,6 +2378,7 @@ err_eeprom:
 	if (hw->flash_address)
 		iounmap(hw->flash_address);
 err_sw_init:
+	kfree(adapter->shadow_vfta);
 	igb_clear_interrupt_scheme(adapter);
 	iounmap(hw->hw_addr);
 err_ioremap:
@@ -7142,6 +7143,7 @@ static int igb_resume(struct device *dev)
 
 	if (igb_init_interrupt_scheme(adapter, true)) {
 		dev_err(&pdev->dev, "Unable to allocate memory for queues\n");
+		rtnl_unlock();
 		return -ENOMEM;
 	}
 
