@@ -1,5 +1,6 @@
 CFLAGS_cpufreq_impulse.o := -Wno-unused-value
 CFLAGS_cpufreq_yankactive.o := -Wno-sequence-point
+CFLAGS_cpufreq_zzmoove.o := -Wno-misleading-indentation
 
 # CPUfreq core
 obj-$(CONFIG_CPU_FREQ)			+= cpufreq.o freq_table.o
