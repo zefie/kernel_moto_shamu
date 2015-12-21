@@ -302,66 +302,24 @@ __read_mostly int scheduler_running;
  */
 int sysctl_sched_rt_runtime = 950000;
 
+/*
+ * Number of sched_yield calls that result in a thread yielding
+ * to itself before a sleep is injected in its next sched_yield call
+ * Setting this to -1 will disable adding sleep in sched_yield
+ */
+const_debug int sysctl_sched_yield_sleep_threshold = 4;
+
+/*
+ * Sleep duration in us used when sched_yield_sleep_threshold
+ * is exceeded.
+ */
+const_debug unsigned int sysctl_sched_yield_sleep_duration = 50;
 
 /*
  * Maximum possible frequency across all cpus. Task demand and cpu
  * capacity (cpu_power) metrics could be scaled in reference to it.
  */
 static unsigned int max_possible_freq = 1;
-
-/*
- * __task_rq_lock - lock the rq @p resides on.
- */
-static inline struct rq *__task_rq_lock(struct task_struct *p)
-	__acquires(rq->lock)
-{
-	struct rq *rq;
-
-	lockdep_assert_held(&p->pi_lock);
-
-	for (;;) {
-		rq = task_rq(p);
-		raw_spin_lock(&rq->lock);
-		if (likely(rq == task_rq(p)))
-			return rq;
-		raw_spin_unlock(&rq->lock);
-	}
-}
-
-/*
- * task_rq_lock - lock p->pi_lock and lock the rq @p resides on.
- */
-static struct rq *task_rq_lock(struct task_struct *p, unsigned long *flags)
-	__acquires(p->pi_lock)
-	__acquires(rq->lock)
-{
-	struct rq *rq;
-
-	for (;;) {
-		raw_spin_lock_irqsave(&p->pi_lock, *flags);
-		rq = task_rq(p);
-		raw_spin_lock(&rq->lock);
-		if (likely(rq == task_rq(p)))
-			return rq;
-		raw_spin_unlock(&rq->lock);
-		raw_spin_unlock_irqrestore(&p->pi_lock, *flags);
-	}
-}
-
-static void __task_rq_unlock(struct rq *rq)
-	__releases(rq->lock)
-{
-	raw_spin_unlock(&rq->lock);
-}
-
-static inline void
-task_rq_unlock(struct rq *rq, struct task_struct *p, unsigned long *flags)
-	__releases(rq->lock)
-	__releases(p->pi_lock)
-{
-	raw_spin_unlock(&rq->lock);
-	raw_spin_unlock_irqrestore(&p->pi_lock, *flags);
-}
 
 /*
  * this_rq_lock - lock this runqueue and disable interrupts.
@@ -1603,6 +1561,8 @@ static int ttwu_remote(struct task_struct *p, int wake_flags)
 
 	rq = __task_rq_lock(p);
 	if (p->on_rq) {
+		/* check_preempt_curr() may use rq clock */
+		update_rq_clock(rq);
 		ttwu_do_wakeup(rq, p, wake_flags);
 		ret = 1;
 	}
@@ -3348,6 +3308,7 @@ need_resched:
 	if (likely(prev != next)) {
 		rq->nr_switches++;
 		rq->curr = next;
+		prev->yield_count = 0;
 		++*switch_count;
 
 		context_switch(rq, prev, next); /* unlocks the rq */
@@ -3359,8 +3320,10 @@ need_resched:
 		 */
 		cpu = smp_processor_id();
 		rq = cpu_rq(cpu);
-	} else
+	} else {
+		prev->yield_count++;
 		raw_spin_unlock_irq(&rq->lock);
+	}
 
 	post_schedule(rq);
 
@@ -4415,6 +4378,7 @@ int sched_setscheduler_nocheck(struct task_struct *p, int policy,
 	};
 	return __sched_setscheduler(p, &attr, false);
 }
+EXPORT_SYMBOL(sched_setscheduler_nocheck);
 
 static int
 do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
@@ -4895,6 +4859,8 @@ SYSCALL_DEFINE0(sched_yield)
 	struct rq *rq = this_rq_lock();
 
 	schedstat_inc(rq, yld_count);
+	if (rq->curr->yield_count == sysctl_sched_yield_sleep_threshold)
+		schedstat_inc(rq, yield_sleep_count);
 	current->sched_class->yield_task(rq);
 
 	/*
@@ -4906,7 +4872,11 @@ SYSCALL_DEFINE0(sched_yield)
 	do_raw_spin_unlock(&rq->lock);
 	sched_preempt_enable_no_resched();
 
-	schedule();
+	if (rq->curr->yield_count == sysctl_sched_yield_sleep_threshold)
+		usleep_range(sysctl_sched_yield_sleep_duration,
+				sysctl_sched_yield_sleep_duration + 5);
+	else
+		schedule();
 
 	return 0;
 }
@@ -7142,16 +7112,13 @@ static int build_sched_domains(const struct cpumask *cpu_map,
 		sd = NULL;
 		for (tl = sched_domain_topology; tl->init; tl++) {
 			sd = build_sched_domain(tl, &d, cpu_map, attr, sd, i);
+			if (tl == sched_domain_topology)
+				*per_cpu_ptr(d.sd, i) = sd;
 			if (tl->flags & SDTL_OVERLAP || sched_feat(FORCE_SD_OVERLAP))
 				sd->flags |= SD_OVERLAP;
 			if (cpumask_equal(cpu_map, sched_domain_span(sd)))
 				break;
 		}
-
-		while (sd->child)
-			sd = sd->child;
-
-		*per_cpu_ptr(d.sd, i) = sd;
 	}
 
 	/* Build the groups for the domains */
