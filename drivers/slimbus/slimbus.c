@@ -1105,6 +1105,50 @@ int slim_user_msg(struct slim_device *sb, u8 la, u8 mt, u8 mc,
 EXPORT_SYMBOL(slim_user_msg);
 
 /*
+ * Queue bulk of message writes:
+ * slim_bulk_msg_write: Write bulk of messages (e.g. downloading FW)
+ * @sb: Client handle sending these messages
+ * @la: Destination device for these messages
+ * @mt: Message Type
+ * @mc: Message Code
+ * @msgs: List of messages to be written in bulk
+ * @n: Number of messages in the list
+ * @cb: Callback if client needs this to be non-blocking
+ * @ctx: Context for this callback
+ * If supported by controller, this message list will be sent in bulk to the HW
+ * If the client specifies this to be non-blocking, the callback will be
+ * called from atomic context.
+ */
+int slim_bulk_msg_write(struct slim_device *sb, u8 mt, u8 mc,
+			struct slim_val_inf msgs[], int n,
+			int (*comp_cb)(void *ctx, int err), void *ctx)
+{
+	int i, ret;
+
+	if (!sb || !sb->ctrl || !msgs)
+		return -EINVAL;
+	if (!sb->ctrl->xfer_bulk_wr) {
+		pr_warn("controller does not support bulk WR, serializing");
+		for (i = 0; i < n; i++) {
+			struct slim_ele_access ele;
+
+			ele.comp = NULL;
+			ele.start_offset = msgs[i].start_offset;
+			ele.num_bytes = msgs[i].num_bytes;
+			ret = slim_xfer_msg(sb->ctrl, sb, &ele, mc,
+					msgs[i].rbuf, msgs[i].wbuf,
+					ele.num_bytes);
+			if (ret)
+				return ret;
+		}
+		return ret;
+	}
+	return sb->ctrl->xfer_bulk_wr(sb->ctrl, sb->laddr, mt, mc, msgs, n,
+					comp_cb, ctx);
+}
+EXPORT_SYMBOL(slim_bulk_msg_write);
+
+/*
  * slim_alloc_mgrports: Allocate port on manager side.
  * @sb: device/client handle.
  * @req: Port request type.
@@ -1230,6 +1274,37 @@ int slim_dealloc_mgrports(struct slim_device *sb, u32 *hdl, int nports)
 EXPORT_SYMBOL_GPL(slim_dealloc_mgrports);
 
 /*
+ * slim_config_mgrports: Configure manager side ports
+ * @sb: device/client handle.
+ * @ph: array of port handles for which this configuration is valid
+ * @nports: Number of ports in ph
+ * @cfg: configuration requested for port(s)
+ * Configure port settings if they are different than the default ones.
+ * Returns success if the config could be applied. Returns -EISCONN if the
+ * port is in use
+ */
+int slim_config_mgrports(struct slim_device *sb, u32 *ph, int nports,
+				struct slim_port_cfg *cfg)
+{
+	int i;
+	struct slim_controller *ctrl;
+	if (!sb || !ph || !nports || !sb->ctrl || !cfg)
+		return -EINVAL;
+
+	ctrl = sb->ctrl;
+	mutex_lock(&ctrl->sched.m_reconf);
+	for (i = 0; i < nports; i++) {
+		u8 pn = SLIM_HDL_TO_PORT(ph[i]);
+		if (ctrl->ports[pn].state == SLIM_P_CFG)
+			return -EISCONN;
+		ctrl->ports[pn].cfg = *cfg;
+	}
+	mutex_unlock(&ctrl->sched.m_reconf);
+	return 0;
+}
+EXPORT_SYMBOL(slim_config_mgrports);
+
+/*
  * slim_get_slaveport: Get slave port handle
  * @la: slave device logical address.
  * @idx: port index at slave
@@ -1282,8 +1357,12 @@ static int disconnect_port_ch(struct slim_controller *ctrl, u32 ph)
 	ret = slim_processtxn(ctrl, &txn, false);
 	if (ret)
 		return ret;
-	if (la == SLIM_LA_MANAGER)
+	if (la == SLIM_LA_MANAGER) {
 		ctrl->ports[pn].state = SLIM_P_UNCFG;
+		ctrl->ports[pn].cfg.watermark = 0;
+		ctrl->ports[pn].cfg.port_opts = 0;
+		ctrl->ports[pn].ch = NULL;
+	}
 	return 0;
 }
 
@@ -1307,6 +1386,7 @@ int slim_connect_src(struct slim_device *sb, u32 srch, u16 chanh)
 	struct slim_ich *slc = &ctrl->chans[chan];
 	enum slim_port_flow flow = SLIM_HDL_TO_FLOW(srch);
 	u8 la = SLIM_HDL_TO_LA(srch);
+	u8 pn = SLIM_HDL_TO_PORT(srch);
 
 	/* manager ports don't have direction when they are allocated */
 	if (la != SLIM_LA_MANAGER && flow != SLIM_SRC)
@@ -1315,7 +1395,6 @@ int slim_connect_src(struct slim_device *sb, u32 srch, u16 chanh)
 	mutex_lock(&ctrl->sched.m_reconf);
 
 	if (la == SLIM_LA_MANAGER) {
-		u8 pn = SLIM_HDL_TO_PORT(srch);
 		if (pn >= ctrl->nports ||
 			ctrl->ports[pn].state != SLIM_P_UNCFG) {
 			ret = -EINVAL;
@@ -1336,7 +1415,7 @@ int slim_connect_src(struct slim_device *sb, u32 srch, u16 chanh)
 		ret = -EALREADY;
 		goto connect_src_err;
 	}
-
+	ctrl->ports[pn].ch = &slc->prop;
 	ret = connect_port_ch(ctrl, chan, srch, SLIM_SRC);
 
 	if (!ret)
@@ -1395,8 +1474,10 @@ int slim_connect_sink(struct slim_device *sb, u32 *sinkh, int nsink, u16 chanh)
 				(pn >= ctrl->nports ||
 				ctrl->ports[pn].state != SLIM_P_UNCFG))
 				ret = -EINVAL;
-		else
+		else {
+			ctrl->ports[pn].ch = &slc->prop;
 			ret = connect_port_ch(ctrl, chan, sinkh[j], SLIM_SINK);
+		}
 		if (ret) {
 			for (j = j - 1; j >= 0; j--)
 				disconnect_port_ch(ctrl, sinkh[j]);
@@ -1589,14 +1670,20 @@ static int slim_remove_ch(struct slim_controller *ctrl, struct slim_ich *slc)
 		 * disconnect. It is client's responsibility to call disconnect
 		 * on ports owned by the slave device
 		 */
-		if (la == SLIM_LA_MANAGER)
+		if (la == SLIM_LA_MANAGER) {
 			ctrl->ports[SLIM_HDL_TO_PORT(ph)].state = SLIM_P_UNCFG;
+			ctrl->ports[SLIM_HDL_TO_PORT(ph)].ch = NULL;
+		}
 	}
 
 	ph = slc->srch;
 	la = SLIM_HDL_TO_LA(ph);
-	if (la == SLIM_LA_MANAGER)
-		ctrl->ports[SLIM_HDL_TO_PORT(ph)].state = SLIM_P_UNCFG;
+	if (la == SLIM_LA_MANAGER) {
+		u8 pn = SLIM_HDL_TO_PORT(ph);
+		ctrl->ports[pn].state = SLIM_P_UNCFG;
+		ctrl->ports[pn].cfg.watermark = 0;
+		ctrl->ports[pn].cfg.port_opts = 0;
+	}
 
 	kfree(slc->sinkh);
 	slc->sinkh = NULL;

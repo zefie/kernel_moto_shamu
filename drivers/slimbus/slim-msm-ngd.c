@@ -83,6 +83,7 @@ enum ngd_status {
 
 static int ngd_slim_runtime_resume(struct device *device);
 static int ngd_slim_power_up(struct msm_slim_ctrl *dev, bool mdm_restart);
+static void ngd_adsp_down(struct msm_slim_ctrl *dev);
 
 static irqreturn_t ngd_slim_interrupt(int irq, void *d)
 {
@@ -187,15 +188,8 @@ static int dsp_ssr_notify_cb(struct notifier_block *n, unsigned long code,
 		/* make sure autosuspend is not called until ADSP comes up*/
 		pm_runtime_get_noresume(dev->dev);
 		dev->state = MSM_CTRL_DOWN;
-		/* Reset ctrl_up completion */
-		init_completion(&dev->ctrl_up);
-		/* disconnect BAM pipes */
-		if (dev->use_rx_msgqs == MSM_MSGQ_ENABLED)
-			dev->use_rx_msgqs = MSM_MSGQ_DOWN;
-		if (dev->use_tx_msgqs == MSM_MSGQ_ENABLED)
-			dev->use_tx_msgqs = MSM_MSGQ_DOWN;
 		msm_slim_sps_exit(dev, false);
-		schedule_work(&dev->qmi.ssr_down);
+		ngd_adsp_down(dev);
 		mutex_unlock(&dev->tx_lock);
 		break;
 	default:
@@ -577,15 +571,15 @@ static int ngd_xfer_msg(struct slim_controller *ctrl, struct slim_msg_txn *txn)
 							i, *(pbuf + i));
 			if (idx < MSM_TX_BUFS)
 				dev->wr_comp[idx] = NULL;
-			/* print BAM debug info for TX pipe */
-			sps_get_bam_debug_info(dev->bam.hdl, 93,
-						SPS_BAM_PIPE(4), 0, 2);
 			/*
 			 * disconnect/recoonect pipe so that subsequent
 			 * transactions don't timeout due to unavailable
 			 * descriptors
 			 */
 			if (dev->state != MSM_CTRL_DOWN) {
+				/* print BAM debug info for TX pipe */
+				sps_get_bam_debug_info(dev->bam.hdl, 93,
+							SPS_BAM_PIPE(4), 0, 2);
 				msm_slim_disconnect_endp(dev, &dev->tx_msgq,
 							&dev->use_tx_msgqs);
 				msm_slim_connect_endp(dev, &dev->tx_msgq, NULL);
@@ -652,32 +646,41 @@ ngd_xfer_err:
 	return ret ? ret : dev->err;
 }
 
+static int ngd_get_ec(u16 start_offset, u8 len, u16 *ec)
+{
+	if (len > SLIM_MAX_VE_SLC_BYTES ||
+		start_offset > MSM_SLIM_VE_MAX_MAP_ADDR)
+		return -EINVAL;
+	if (len <= 4) {
+		*ec = len - 1;
+	} else if (len <= 8) {
+		if (len & 0x1)
+			return -EINVAL;
+		*ec = ((len >> 1) + 1);
+	} else {
+		if (len & 0x3)
+			return -EINVAL;
+		*ec = ((len >> 2) + 3);
+	}
+	*ec |= (0x8 | ((start_offset & 0xF) << 4));
+	*ec |= ((start_offset & 0xFF0) << 4);
+	return 0;
+}
+
 static int ngd_user_msg(struct slim_controller *ctrl, u8 la, u8 mt, u8 mc,
 				struct slim_ele_access *msg, u8 *buf, u8 len)
 {
+	int ret;
 	struct slim_msg_txn txn;
 
 	if (mt != SLIM_MSG_MT_DEST_REFERRED_USER ||
 		mc != SLIM_USR_MC_REPEAT_CHANGE_VALUE) {
 		return -EPROTONOSUPPORT;
 	}
-	if (len > SLIM_MAX_VE_SLC_BYTES ||
-		msg->start_offset > MSM_SLIM_VE_MAX_MAP_ADDR)
-		return -EINVAL;
-	if (len <= 4) {
-		txn.ec = len - 1;
-	} else if (len <= 8) {
-		if (len & 0x1)
-			return -EINVAL;
-		txn.ec = ((len >> 1) + 1);
-	} else {
-		if (len & 0x3)
-			return -EINVAL;
-		txn.ec = ((len >> 2) + 3);
-	}
-	txn.ec |= (0x8 | ((msg->start_offset & 0xF) << 4));
-	txn.ec |= ((msg->start_offset & 0xFF0) << 4);
 
+	ret = ngd_get_ec(msg->start_offset, len, &txn.ec);
+	if (ret)
+		return ret;
 	txn.la = la;
 	txn.mt = mt;
 	txn.mc = mc;
@@ -688,6 +691,146 @@ static int ngd_user_msg(struct slim_controller *ctrl, u8 la, u8 mt, u8 mc,
 	txn.rbuf = NULL;
 	txn.comp = msg->comp;
 	return ngd_xfer_msg(ctrl, &txn);
+}
+
+static int ngd_bulk_cb(void *ctx, int err)
+{
+	if (ctx)
+		complete(ctx);
+	return err;
+}
+
+static int ngd_bulk_wr(struct slim_controller *ctrl, u8 la, u8 mt, u8 mc,
+			struct slim_val_inf msgs[], int n,
+			int (*comp_cb)(void *ctx, int err), void *ctx)
+{
+	struct msm_slim_ctrl *dev = slim_get_ctrldata(ctrl);
+	int i, ret;
+	struct msm_slim_endp *endpoint = &dev->tx_msgq;
+	struct sps_pipe *pipe = endpoint->sps;
+	u32 *header;
+	DECLARE_COMPLETION_ONSTACK(done);
+
+	ret = msm_slim_get_ctrl(dev);
+	mutex_lock(&dev->tx_lock);
+
+	if ((pm_runtime_enabled(dev->dev) && ret < 0) ||
+			dev->state == MSM_CTRL_DOWN) {
+		SLIM_WARN(dev, "vote failed/SSR in-progress ret:%d, state:%d",
+				ret, dev->state);
+		pm_runtime_set_suspended(dev->dev);
+		mutex_unlock(&dev->tx_lock);
+		msm_slim_put_ctrl(dev);
+		return -EREMOTEIO;
+	}
+	if (!pm_runtime_enabled(dev->dev) && dev->state == MSM_CTRL_ASLEEP) {
+		mutex_unlock(&dev->tx_lock);
+		ret = ngd_slim_runtime_resume(dev->dev);
+
+		if (ret) {
+			SLIM_ERR(dev, "slim resume failed ret:%d, state:%d",
+					ret, dev->state);
+			return -EREMOTEIO;
+		}
+		mutex_lock(&dev->tx_lock);
+	}
+	if (dev->use_tx_msgqs != MSM_MSGQ_ENABLED) {
+		SLIM_WARN(dev, "bulk wr not supported");
+		ret = -EPROTONOSUPPORT;
+		goto retpath;
+	}
+	if (dev->bulk.in_progress) {
+		SLIM_WARN(dev, "bulk wr in progress:");
+		ret = -EAGAIN;
+		goto retpath;
+	}
+	dev->bulk.in_progress = true;
+	/* every txn has 5 bytes of overhead: la, mc, mt, ec, len */
+	dev->bulk.size = n * 5;
+	for (i = 0; i < n; i++) {
+		dev->bulk.size += msgs[i].num_bytes;
+		dev->bulk.size += (4 - ((msgs[i].num_bytes + 1) & 0x3));
+	}
+
+	if (dev->bulk.size > 0xffff) {
+		SLIM_WARN(dev, "len exceeds limit, split bulk and retry");
+		ret = -EDQUOT;
+		goto retpath;
+	}
+	if (dev->bulk.size > dev->bulk.buf_sz) {
+		void *temp = krealloc(dev->bulk.base, dev->bulk.size,
+				      GFP_KERNEL);
+		if (!temp) {
+			ret = -ENOMEM;
+			goto retpath;
+		}
+		dev->bulk.base = temp;
+		dev->bulk.buf_sz = dev->bulk.size;
+	}
+
+	header = dev->bulk.base;
+	for (i = 0; i < n; i++) {
+		u8 *buf = (u8 *)header;
+		int rl = msgs[i].num_bytes + 5;
+		u16 ec;
+
+		*header = SLIM_MSG_ASM_FIRST_WORD(rl, mt, mc, 0, la);
+		buf += 3;
+		ret = ngd_get_ec(msgs[i].start_offset, msgs[i].num_bytes, &ec);
+		if (ret)
+			goto retpath;
+		*(buf++) = (ec & 0xFF);
+		*(buf++) = (ec >> 8) & 0xFF;
+		memcpy(buf, msgs[i].wbuf, msgs[i].num_bytes);
+		buf += msgs[i].num_bytes;
+		header += (rl >> 2);
+		if (rl & 3) {
+			header++;
+			memset(buf, 0, ((u8 *)header - buf));
+		}
+	}
+	header = dev->bulk.base;
+	/* SLIM_INFO only prints to internal buffer log, does not do pr_info */
+	for (i = 0; i < (dev->bulk.size); i += 16, header += 4)
+		SLIM_INFO(dev, "bulk sz:%d:0x%x, 0x%x, 0x%x, 0x%x",
+			  dev->bulk.size, *header, *(header+1), *(header+2),
+			  *(header+3));
+	if (comp_cb) {
+		dev->bulk.cb = comp_cb;
+		dev->bulk.ctx = ctx;
+	} else {
+		dev->bulk.cb = ngd_bulk_cb;
+		dev->bulk.ctx = &done;
+	}
+	dev->bulk.wr_dma = dma_map_single(dev->dev, dev->bulk.base,
+					  dev->bulk.size, DMA_TO_DEVICE);
+	if (dma_mapping_error(dev->dev, dev->bulk.wr_dma)) {
+		ret = -ENOMEM;
+		goto retpath;
+	}
+
+	ret = sps_transfer_one(pipe, dev->bulk.wr_dma, dev->bulk.size, NULL,
+				SPS_IOVEC_FLAG_EOT);
+	if (ret) {
+		SLIM_WARN(dev, "sps transfer one returned error:%d", ret);
+		goto retpath;
+	}
+	if (dev->bulk.cb == ngd_bulk_cb) {
+		int timeout = wait_for_completion_timeout(&done, HZ);
+
+		if (!timeout) {
+			SLIM_WARN(dev, "timeout for bulk wr");
+			dma_unmap_single(dev->dev, dev->bulk.wr_dma,
+					 dev->bulk.size, DMA_TO_DEVICE);
+			ret = -ETIMEDOUT;
+		}
+	}
+retpath:
+	if (ret)
+		dev->bulk.in_progress = false;
+	mutex_unlock(&dev->tx_lock);
+	msm_slim_put_ctrl(dev);
+	return ret;
 }
 
 static int ngd_xferandwait_ack(struct slim_controller *ctrl,
@@ -775,7 +918,7 @@ static int ngd_allocbw(struct slim_device *sb, int *subfrmc, int *clkgear)
 			/* Per protocol, only last 5 bits for client no. */
 			wbuf[txn.len++] = (u8) (slc->prop.dataf << 5) |
 					(sb->laddr & 0x1f);
-			wbuf[txn.len] = slc->seglen;
+			wbuf[txn.len] = slc->prop.sampleszbits >> 2;
 			if (slc->srch && slc->prop.prot == SLIM_PUSH)
 				slc->prop.prot = SLIM_PULL;
 			if (slc->coeff == SLIM_COEFF_3)
@@ -897,6 +1040,15 @@ static int ngd_get_laddr(struct slim_controller *ctrl, const u8 *ea,
 static void ngd_slim_setup_msg_path(struct msm_slim_ctrl *dev)
 {
 	if (dev->state == MSM_CTRL_DOWN) {
+		/* if called after SSR, cleanup and re-assign */
+		if (dev->use_tx_msgqs != MSM_MSGQ_RESET)
+			msm_slim_deinit_ep(dev, &dev->tx_msgq,
+					   &dev->use_tx_msgqs);
+
+		if (dev->use_rx_msgqs != MSM_MSGQ_RESET)
+			msm_slim_deinit_ep(dev, &dev->rx_msgq,
+					   &dev->use_rx_msgqs);
+
 		msm_slim_sps_init(dev, dev->bam_mem,
 			NGD_BASE(dev->ctrl.nr,
 			dev->ver) + NGD_STATUS, true);
@@ -1105,9 +1257,9 @@ static int ngd_slim_power_up(struct msm_slim_ctrl *dev, bool mdm_restart)
 		dev->state = MSM_CTRL_DOWN;
 	}
 
-	msm_slim_disconnect_endp(dev, &dev->rx_msgq,
+	msm_slim_deinit_ep(dev, &dev->rx_msgq,
 				&dev->use_rx_msgqs);
-	msm_slim_disconnect_endp(dev, &dev->tx_msgq,
+	msm_slim_deinit_ep(dev, &dev->tx_msgq,
 				&dev->use_tx_msgqs);
 	/*
 	 * ADSP power collapse case (OR SSR), where HW was reset
@@ -1286,12 +1438,8 @@ static int ngd_notify_slaves(void *data)
 	return 0;
 }
 
-static void ngd_adsp_down(struct work_struct *work)
+static void ngd_adsp_down(struct msm_slim_ctrl *dev)
 {
-	struct msm_slim_qmi *qmi =
-		container_of(work, struct msm_slim_qmi, ssr_down);
-	struct msm_slim_ctrl *dev =
-		container_of(qmi, struct msm_slim_ctrl, qmi);
 	struct slim_controller *ctrl = &dev->ctrl;
 	struct slim_device *sbdev;
 
@@ -1378,6 +1526,15 @@ static int ngd_slim_probe(struct platform_device *pdev)
 				GFP_KERNEL);
 	if (!dev->wr_comp)
 		return -ENOMEM;
+
+	/* typical txn numbers and size used in bulk operation */
+	dev->bulk.buf_sz = SLIM_MAX_TXNS * 8;
+	dev->bulk.base = kzalloc(dev->bulk.buf_sz, GFP_KERNEL);
+	if (!dev->bulk.base) {
+		ret = -ENOMEM;
+		goto err_nobulk;
+	}
+
 	dev->dev = &pdev->dev;
 	platform_set_drvdata(pdev, dev);
 	slim_set_ctrldata(&dev->ctrl, dev);
@@ -1451,6 +1608,7 @@ static int ngd_slim_probe(struct platform_device *pdev)
 	dev->ctrl.allocbw = ngd_allocbw;
 	dev->ctrl.xfer_msg = ngd_xfer_msg;
 	dev->ctrl.xfer_user_msg = ngd_user_msg;
+	dev->ctrl.xfer_bulk_wr = ngd_bulk_wr;
 	dev->ctrl.wakeup = NULL;
 	dev->ctrl.alloc_port = msm_alloc_port;
 	dev->ctrl.dealloc_port = msm_dealloc_port;
@@ -1522,7 +1680,6 @@ static int ngd_slim_probe(struct platform_device *pdev)
 				dev->ext_mdm.ssr);
 	}
 
-	INIT_WORK(&dev->qmi.ssr_down, ngd_adsp_down);
 	INIT_WORK(&dev->qmi.ssr_up, ngd_adsp_up);
 	dev->qmi.nb.notifier_call = ngd_qmi_available;
 	pm_runtime_get_noresume(dev->dev);
@@ -1561,6 +1718,8 @@ err_ioremap_failed:
 	if (dev->sysfs_created)
 		sysfs_remove_file(&dev->dev->kobj,
 				&dev_attr_debug_mask.attr);
+	kfree(dev->bulk.base);
+err_nobulk:
 	kfree(dev->wr_comp);
 	kfree(dev);
 	return ret;
@@ -1583,6 +1742,7 @@ static int ngd_slim_remove(struct platform_device *pdev)
 	if (!IS_ERR_OR_NULL(dev->ext_mdm.ssr))
 		subsys_notif_unregister_notifier(dev->ext_mdm.ssr,
 						&dev->ext_mdm.nb);
+	kfree(dev->bulk.base);
 	free_irq(dev->irq, dev);
 	slim_del_controller(&dev->ctrl);
 	kthread_stop(dev->rx_msgq_thread);
