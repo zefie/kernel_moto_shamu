@@ -3323,6 +3323,7 @@ static int msm_ipc_router_add_xprt(struct msm_ipc_router_xprt *xprt)
 static void msm_ipc_router_remove_xprt(struct msm_ipc_router_xprt *xprt)
 {
 	struct msm_ipc_router_xprt_info *xprt_info;
+	struct rr_packet *temp_pkt, *pkt;
 
 	if (xprt && xprt->priv) {
 		xprt_info = xprt->priv;
@@ -3330,13 +3331,22 @@ static void msm_ipc_router_remove_xprt(struct msm_ipc_router_xprt *xprt)
 		mutex_lock(&xprt_info->rx_lock_lhb2);
 		xprt_info->abort_data_read = 1;
 		mutex_unlock(&xprt_info->rx_lock_lhb2);
+		flush_workqueue(xprt_info->workqueue);
+		destroy_workqueue(xprt_info->workqueue);
+		mutex_lock(&xprt_info->rx_lock_lhb2);
+		list_for_each_entry_safe(pkt, temp_pkt,
+					 &xprt_info->pkt_list, list) {
+			list_del(&pkt->list);
+			release_pkt(pkt);
+		}
+		mutex_unlock(&xprt_info->rx_lock_lhb2);
 
 		down_write(&xprt_info_list_lock_lha5);
 		list_del(&xprt_info->list);
 		up_write(&xprt_info_list_lock_lha5);
 
-		flush_workqueue(xprt_info->workqueue);
-		destroy_workqueue(xprt_info->workqueue);
+		msm_ipc_cleanup_routing_table(xprt_info);
+
 		wakeup_source_trash(&xprt_info->ws);
 
 		xprt->priv = 0;
@@ -3364,7 +3374,6 @@ static void xprt_close_worker(struct work_struct *work)
 	struct msm_ipc_router_xprt_work *xprt_work =
 		container_of(work, struct msm_ipc_router_xprt_work, work);
 
-	msm_ipc_cleanup_routing_table(xprt_work->xprt->priv);
 	msm_ipc_router_remove_xprt(xprt_work->xprt);
 	xprt_work->xprt->sft_close_done(xprt_work->xprt);
 	kfree(xprt_work);
