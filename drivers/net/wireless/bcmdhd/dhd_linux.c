@@ -700,7 +700,7 @@ static int dhd_toe_get(dhd_info_t *dhd, int idx, uint32 *toe_ol);
 static int dhd_toe_set(dhd_info_t *dhd, int idx, uint32 toe_ol);
 #endif /* TOE */
 
-static int dhd_wl_host_event(dhd_info_t *dhd, int *ifidx, void *pktdata,
+static int dhd_wl_host_event(dhd_info_t *dhd, int *ifidx, void *pktdata, size_t pktlen,
                              wl_event_msg_t *event_ptr, void **data_ptr);
 #ifdef DHD_UNICAST_DHCP
 static const uint8 llc_snap_hdr[SNAP_HDR_LEN] = {0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00};
@@ -835,10 +835,11 @@ static int dhd_sar_callback(struct notifier_block *nfb, unsigned long action, vo
 		 * qtxpower variable allows us to overwrite TX power.
 		 */
 		txpower = *(s32*)data;
-		if (txpower == -1 || txpower > 127)
+		if (txpower == -1 || txpower >= 127)
 			txpower = 127; /* Max val of 127 qdbm */
+		else
+			txpower |= WL_TXPWR_OVERRIDE;
 
-		txpower |= WL_TXPWR_OVERRIDE;
 		txpower = htod32(txpower);
 
 		bcm_mkiovar("qtxpower", (char *)&txpower, 4, iovbuf, sizeof(iovbuf));
@@ -2517,16 +2518,6 @@ dhd_start_xmit(struct sk_buff *skb, struct net_device *net)
 #endif /* DHD_WMF */
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
-#ifdef PCIE_FULL_DONGLE
-	if (dhd->pub.busstate == DHD_BUS_SUSPEND) {
-		DHD_ERROR(("%s : pcie is still in suspend state!!\n", __FUNCTION__));
-		dev_kfree_skb_any(skb);
-		ifp = DHD_DEV_IFP(net);
-		ifp->stats.tx_dropped++;
-		dhd->pub.tx_dropped++;
-		return NETDEV_TX_OK;
-	}
-#endif
 	DHD_OS_WAKE_LOCK(&dhd->pub);
 	DHD_PERIM_LOCK_TRY(DHD_FWDER_UNIT(dhd), TRUE);
 
@@ -3027,6 +3018,7 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan,
 #else
 			skb->mac.raw,
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 22) */
+			len - 2,
 			&event,
 			&data);
 
@@ -7457,16 +7449,18 @@ dhd_get_wireless_stats(struct net_device *dev)
 #endif /* defined(WL_WIRELESS_EXT) */
 
 static int
-dhd_wl_host_event(dhd_info_t *dhd, int *ifidx, void *pktdata,
+dhd_wl_host_event(dhd_info_t *dhd, int *ifidx, void *pktdata, size_t pktlen,
 	wl_event_msg_t *event, void **data)
 {
 	int bcmerror = 0;
 	ASSERT(dhd != NULL);
 
 #ifdef SHOW_LOGTRACE
-		bcmerror = wl_host_event(&dhd->pub, ifidx, pktdata, event, data, &dhd->event_data);
+		bcmerror = wl_host_event(&dhd->pub, ifidx, pktdata, pktlen,
+				event, data, &dhd->event_data);
 #else
-		bcmerror = wl_host_event(&dhd->pub, ifidx, pktdata, event, data, NULL);
+		bcmerror = wl_host_event(&dhd->pub, ifidx, pktdata, pktlen,
+				event, data, NULL);
 #endif /* SHOW_LOGTRACE */
 
 	if (bcmerror != BCME_OK)
@@ -8339,14 +8333,15 @@ dhd_dev_start_mkeep_alive(dhd_pub_t *dhd_pub, u8 mkeep_alive_id, u8 *ip_pkt, u16
 	const char		*str;
 	wl_mkeep_alive_pkt_t mkeep_alive_pkt = {0};
 	wl_mkeep_alive_pkt_t *mkeep_alive_pktp;
-	int				buf_len;
-	int				str_len;
+	int			buf_len;
+	int			str_len;
 	int 			res = BCME_ERROR;
 	int 			len_bytes = 0;
 	int 			i;
 
 	/* ether frame to have both max IP pkt (256 bytes) and ether header */
-	char 			*pmac_frame;
+	char 			*pmac_frame = NULL;
+	char 			*pmac_frame_begin = NULL;
 
 	/*
 	 * The mkeep_alive packet is for STA interface only; if the bss is configured as AP,
@@ -8368,6 +8363,7 @@ dhd_dev_start_mkeep_alive(dhd_pub_t *dhd_pub, u8 mkeep_alive_id, u8 *ip_pkt, u16
 		res = BCME_NOMEM;
 		goto exit;
 	}
+	pmac_frame_begin = pmac_frame;
 
 	/*
 	 * Get current mkeep-alive status.
@@ -8450,7 +8446,7 @@ dhd_dev_start_mkeep_alive(dhd_pub_t *dhd_pub, u8 mkeep_alive_id, u8 *ip_pkt, u16
 	 *     = src mac + dst mac + ether type + ip pkt len
 	 */
 	len_bytes = ETHER_ADDR_LEN*2 + ETHERTYPE_LEN + ip_pkt_len;
-	memcpy(mkeep_alive_pktp->data, pmac_frame, len_bytes);
+	memcpy(mkeep_alive_pktp->data, pmac_frame_begin, len_bytes);
 	buf_len += len_bytes;
 	mkeep_alive_pkt.len_bytes = htod16(len_bytes);
 
@@ -8463,7 +8459,7 @@ dhd_dev_start_mkeep_alive(dhd_pub_t *dhd_pub, u8 mkeep_alive_id, u8 *ip_pkt, u16
 
 	res = dhd_wl_ioctl_cmd(dhd_pub, WLC_SET_VAR, pbuf, buf_len, TRUE, 0);
 exit:
-	kfree(pmac_frame);
+	kfree(pmac_frame_begin);
 	kfree(pbuf);
 	return res;
 }
